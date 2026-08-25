@@ -48,6 +48,8 @@ Color strings remain round-trip compatible. Rendering and draw.io export use a c
 
 See the normative schemas in `schemas/`.
 
+For a deterministic agent workflow that starts from PostgreSQL or MySQL schema-only DDL, including stable-ID rules and a validation checklist, see `docs/schema-authoring.md`.
+
 ## Load workspace and update schema
 
 **Load workspace** accepts one combined file, a schema-only file plus a workspace in either order, or a workspace-only file for the currently open schema. A separate workspace takes precedence over an embedded one. Loading starts with an explicit replacement warning and then creates a non-mutating proposal.

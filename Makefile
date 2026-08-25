@@ -1,4 +1,4 @@
-.PHONY: up up-detached down node-deps build test test-js test-go test-db test-e2e security clean
+.PHONY: up up-detached down node-deps build test test-js test-e2e security clean
 
 COMPOSE = docker compose
 COMPOSE_ALL = $(COMPOSE) --profile tools --profile test
@@ -36,23 +36,11 @@ build: node-deps
 	$(COMPOSE) --profile tools run --rm node sh -c 'npm run examples && npm run build'
 	git diff --exit-code -- examples
 
-test: test-js test-go test-db test-e2e
+test: test-js test-e2e
 
 test-js: node-deps
 	$(call with_cleanup,$(COMPOSE) --profile tools run --rm node sh -c 'npm run examples && npm test')
 	git diff --exit-code -- examples
-
-test-go:
-	$(call with_cleanup,$(COMPOSE) --profile test run --rm go-test)
-
-test-db:
-	$(call with_cleanup, \
-		$(COMPOSE) --profile test up -d --wait postgres; \
-		$(COMPOSE) --profile test run --rm --no-deps schema-integration go test -tags=integration -run '^TestDatabaseExporters$$/^postgresql$$' ./internal/exporter; \
-		$(COMPOSE) --profile test rm --stop --force postgres; \
-		$(COMPOSE) --profile test up -d --wait mysql; \
-		$(COMPOSE) --profile test run --rm --no-deps schema-integration go test -tags=integration -run '^TestDatabaseExporters$$/^mysql$$' ./internal/exporter; \
-		$(COMPOSE) --profile test rm --stop --force mysql)
 
 test-e2e: node-deps
 	$(call with_cleanup, \
@@ -61,7 +49,6 @@ test-e2e: node-deps
 
 security: node-deps
 	$(call with_cleanup,$(COMPOSE) --profile tools run --rm node npm audit --audit-level=moderate)
-	$(call with_cleanup,$(COMPOSE) --profile test run --rm go-test sh -c 'go vet ./... && go tool govulncheck ./...')
 	sh scripts/scan-secrets.sh
 
 clean:

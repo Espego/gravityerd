@@ -86,6 +86,10 @@ function nonnegativeNumber(value, fallback) {
   return Number.isFinite(number) ? Math.max(0, number) : fallback;
 }
 
+function compareStrings(first, second) {
+  return first < second ? -1 : first > second ? 1 : 0;
+}
+
 function normalizeColumn(column, index, path) {
   if (!plainObject(column)) throw new Error(`${path} must be an object`);
   return {
@@ -93,6 +97,7 @@ function normalizeColumn(column, index, path) {
     type: requiredString(column.type, `${path}.type`),
     nullable: Boolean(column.nullable),
     ...(column.default == null ? {} : { default: String(column.default) }),
+    ...(column.comment == null ? {} : { comment: String(column.comment) }),
     ordinal: Number.isInteger(column.ordinal) && column.ordinal > 0 ? column.ordinal : index + 1
   };
 }
@@ -121,9 +126,9 @@ function normalizeTable(table, index) {
     name,
     comment: String(table.comment ?? ""),
     columns: table.columns.map((column, columnIndex) => normalizeColumn(column, columnIndex, `${path}.columns[${columnIndex}]`))
-      .sort((first, second) => first.ordinal - second.ordinal || first.name.localeCompare(second.name)),
+      .sort((first, second) => first.ordinal - second.ordinal || compareStrings(first.name, second.name)),
     constraints: (table.constraints ?? []).map((constraint, constraintIndex) => normalizeConstraint(constraint, `${path}.constraints[${constraintIndex}]`))
-      .sort((first, second) => first.id.localeCompare(second.id))
+      .sort((first, second) => compareStrings(first.id, second.id))
   };
 }
 
@@ -155,13 +160,13 @@ export function normalizeSchema(source) {
   const foreignKeysSource = source.foreignKeys ?? source.foreign_keys ?? [];
   if (!Array.isArray(source.tables) || !source.tables.length) throw new Error("schema.tables must not be empty");
   if (!Array.isArray(foreignKeysSource)) throw new Error("schema.foreignKeys must be an array");
-  const tables = source.tables.map(normalizeTable).sort((first, second) => first.id.localeCompare(second.id));
+  const tables = source.tables.map(normalizeTable).sort((first, second) => compareStrings(first.id, second.id));
   const tableIds = new Set();
   for (const table of tables) {
     if (tableIds.has(table.id)) throw new Error(`Duplicate table id ${table.id}`);
     tableIds.add(table.id);
   }
-  const foreignKeys = foreignKeysSource.map(normalizeForeignKey).sort((first, second) => first.id.localeCompare(second.id));
+  const foreignKeys = foreignKeysSource.map(normalizeForeignKey).sort((first, second) => compareStrings(first.id, second.id));
   const edgeIds = new Set();
   const columnsByTable = new Map(tables.map((table) => [table.id, new Set(table.columns.map((column) => column.name))]));
   for (const table of tables) {

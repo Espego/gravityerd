@@ -1,6 +1,6 @@
 {
   "name": "GravityERD browser automation contract",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "jsonFormatVersion": 1,
   "root": {
     "testId": "app-root",
@@ -10,7 +10,9 @@
       "data-simulation-phase",
       "data-dirty",
       "data-import-proposal",
-      "data-panel-open"
+      "data-panel-open",
+      "data-webmcp",
+      "data-autosave-state"
     ]
   },
   "testIds": {
@@ -32,7 +34,11 @@
     "viewSelect": "view-select",
     "configure": "configure-workspace",
     "configJson": "config-json",
+    "configImpact": "config-impact",
+    "configImpactSummary": "config-impact-summary",
+    "configImpactWarnings": "config-impact-warnings",
     "applyConfig": "apply-config",
+    "autosaveStatus": "autosave-status",
     "unlockAll": "unlock-all",
     "unlockConfirmation": "unlock-confirmation-dialog",
     "confirmUnlock": "confirm-unlock",
@@ -44,7 +50,7 @@
   },
   "readOnlyApi": {
     "global": "gravityErdAutomation",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "methods": {
       "getStatus": { "returns": "AutomationStatus" },
       "getImportProposal": { "returns": "ImportProposalStatus|null" },
@@ -55,7 +61,7 @@
   },
   "mutationApi": {
     "global": "gravityErdAutomation",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "maxDocumentBytes": 16777216,
     "methods": {
       "proposeImport": {
@@ -80,6 +86,23 @@
       }
     }
   },
+  "webMcp": {
+    "api": "document.modelContext.registerTool",
+    "secureContext": true,
+    "featureDetected": true,
+    "registrationStates": ["unsupported", "registering", "ready", "error"],
+    "tools": {
+      "gravityerd_get_status": { "method": "getStatus", "readOnly": true },
+      "gravityerd_get_import_proposal": { "method": "getImportProposal", "readOnly": true },
+      "gravityerd_get_workspace_json": { "method": "getWorkspaceJson", "readOnly": true, "untrustedContent": true },
+      "gravityerd_get_project_json": { "method": "getProjectJson", "readOnly": true, "untrustedContent": true },
+      "gravityerd_get_node": { "method": "getNode", "readOnly": true, "untrustedContent": true, "arguments": ["stableTableId"] },
+      "gravityerd_propose_import": { "method": "proposeImport", "readOnly": false, "untrustedContent": true, "arguments": ["documents: string[1..2]"] },
+      "gravityerd_propose_schema_update": { "method": "proposeSchemaUpdate", "readOnly": false, "untrustedContent": true, "arguments": ["document: string"] },
+      "gravityerd_apply_import_proposal": { "method": "applyImportProposal", "readOnly": false, "arguments": ["expectedFingerprint", "configuration", "layout", "pins"] },
+      "gravityerd_discard_import_proposal": { "method": "discardImportProposal", "readOnly": false }
+    }
+  },
   "sequences": {
     "workspaceImport": [
       "Wait for the filechooser before activating Load workspace.",
@@ -99,6 +122,12 @@
       "Call proposeImport(documents) and require ok=true.",
       "Inspect the returned summary and the visible proposal.",
       "When authorized, call applyImportProposal with the exact returned fingerprint and three explicit boolean choices; otherwise leave it open or discard it."
+    ],
+    "webMcpImport": [
+      "Prefer discovered WebMCP tools when data-webmcp=ready; otherwise use the file chooser or compatible page-global API.",
+      "Call gravityerd_propose_import with one or two serialized JSON documents and require ok=true.",
+      "Inspect the returned summary and visible proposal.",
+      "When authorized, call gravityerd_apply_import_proposal with the exact fingerprint and explicit configuration, layout, and pins booleans."
     ],
     "createView": [
       "Read getWorkspaceJson() and getProjectJson().",

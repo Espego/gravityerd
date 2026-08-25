@@ -9,23 +9,6 @@ x-node-limits: &node-limits
   security_opt: ["no-new-privileges:true"]
   stop_grace_period: 10s
 
-x-go-limits: &go-limits
-  init: true
-  restart: "no"
-  cpus: "${GRAVITYERD_GO_CPUS:-2.0}"
-  mem_limit: "${GRAVITYERD_GO_MEMORY:-1g}"
-  pids_limit: 256
-  security_opt: ["no-new-privileges:true"]
-  stop_grace_period: 10s
-
-x-database-limits: &database-limits
-  init: true
-  restart: "no"
-  cpus: "${GRAVITYERD_DATABASE_CPUS:-1.0}"
-  mem_limit: "${GRAVITYERD_DATABASE_MEMORY:-768m}"
-  pids_limit: 256
-  stop_grace_period: 10s
-
 services:
   web:
     <<: *node-limits
@@ -79,89 +62,6 @@ services:
         condition: service_healthy
     command: ["npx", "playwright", "test", "--config", "app/playwright.config.mjs"]
 
-  go-test:
-    <<: *go-limits
-    image: golang:1.26.6-bookworm
-    working_dir: /workspace
-    profiles: ["test"]
-    volumes:
-      - .:/workspace
-      - go_cache:/go/pkg/mod
-      - go_build_cache:/root/.cache/go-build
-    command: ["go", "test", "./..."]
-
-  schema-export:
-    init: true
-    restart: "no"
-    cpus: "${GRAVITYERD_EXPORTER_CPUS:-1.0}"
-    mem_limit: "${GRAVITYERD_EXPORTER_MEMORY:-256m}"
-    pids_limit: 128
-    security_opt: ["no-new-privileges:true"]
-    stop_grace_period: 10s
-    build:
-      context: .
-      dockerfile: Dockerfile.schema
-    volumes:
-      - ./output:/output
-
-  postgres:
-    <<: *database-limits
-    image: postgres:18-bookworm
-    profiles: ["test"]
-    environment:
-      POSTGRES_DB: gravityerd
-      POSTGRES_USER: gravityerd
-      POSTGRES_PASSWORD: gravityerd
-    tmpfs:
-      - /var/lib/postgresql
-    volumes:
-      - ./test/fixtures/postgres.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gravityerd -d gravityerd"]
-      interval: 2s
-      timeout: 2s
-      retries: 30
-
-  mysql:
-    <<: *database-limits
-    image: mysql:8.4
-    profiles: ["test"]
-    environment:
-      MYSQL_DATABASE: gravityerd
-      MYSQL_USER: gravityerd
-      MYSQL_PASSWORD: gravityerd
-      MYSQL_ROOT_PASSWORD: test-root-only
-    tmpfs:
-      - /var/lib/mysql
-    volumes:
-      - ./test/fixtures/mysql.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
-      interval: 2s
-      timeout: 3s
-      retries: 60
-
-  schema-integration:
-    <<: *go-limits
-    image: golang:1.26.6-bookworm
-    working_dir: /workspace
-    profiles: ["test"]
-    environment:
-      POSTGRES_TEST_URL: postgres://gravityerd:gravityerd@postgres:5432/gravityerd?sslmode=disable
-      MYSQL_TEST_URL: gravityerd:gravityerd@tcp(mysql:3306)/gravityerd?parseTime=true&charset=utf8mb4&collation=utf8mb4_bin
-    volumes:
-      - .:/workspace
-      - go_cache:/go/pkg/mod
-      - go_build_cache:/root/.cache/go-build
-    depends_on:
-      postgres:
-        condition: service_healthy
-      mysql:
-        condition: service_healthy
-    command: ["go", "test", "-tags=integration", "./internal/exporter"]
-
 volumes:
   node_modules:
   npm_cache:
-  go_cache:
-  go_build_cache:

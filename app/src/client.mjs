@@ -28,6 +28,8 @@ import {
   parseAutomationDocuments
 } from "./automation-api.mjs";
 import { loadStoredWorkspace as loadWorkspace, saveStoredWorkspace as saveWorkspace } from "./workspace-store.mjs";
+import { registerWebMcpTools } from "./webmcp.mjs";
+import { analyzeConfiguration } from "./configuration-impact.mjs";
 
 cytoscape.use(fcose);
 
@@ -74,6 +76,10 @@ let labelRenderFrame = 0;
 const nodeLabels = new Map();
 const grabbedNodePositions = new Map();
 let activeForeignKeyRow = null;
+let webMcpState = "unsupported";
+let webMcpRegistration = null;
+let autosaveState = "idle";
+let lastAutosavedAt = null;
 
 function setRootState() {
   app.dataset.ready = "true";
@@ -81,10 +87,28 @@ function setRootState() {
   app.dataset.simulationPhase = phase;
   app.dataset.dirty = String(dirtyRevision !== savedRevision);
   app.dataset.importProposal = pendingProposal ? "pending" : "none";
+  app.dataset.webmcp = webMcpState;
+  app.dataset.autosaveState = autosaveState;
+  renderAutosaveStatus();
+}
+
+function renderAutosaveStatus() {
+  const target = document.getElementById("autosave-status");
+  if (!target) return;
+  let next;
+  if (!schema) next = "No workspace loaded";
+  else if (autosaveState === "pending") next = "Unsaved changes · autosave pending";
+  else if (autosaveState === "saving") next = "Saving workspace locally…";
+  else if (autosaveState === "error") next = "Autosave failed · workspace has unsaved changes";
+  else if (autosaveState === "saved" && lastAutosavedAt) next = `Autosaved locally · ${new Date(lastAutosavedAt).toLocaleTimeString()}`;
+  else next = "Not autosaved yet";
+  if (target.textContent !== next) target.textContent = next;
 }
 
 function markDirty({ immediate = false } = {}) {
   dirtyRevision += 1;
+  if (immediate) autosaveState = "saving";
+  else if (autosaveState !== "error") autosaveState = "pending";
   setRootState();
   if (immediate) persistWorkspace();
   else scheduleAutosave();
@@ -377,12 +401,19 @@ async function persistWorkspace() {
   if (!workspace || !schemaFingerprint) return;
   if (autosaveTimer) clearTimeout(autosaveTimer);
   autosaveTimer = 0;
+  autosaveState = "saving";
+  setRootState();
+  const savingRevision = dirtyRevision;
   try {
     workspace = currentWorkspacePayload({ sync: true });
-    await saveWorkspace(schemaFingerprint, workspace);
-    savedRevision = dirtyRevision;
+    lastAutosavedAt = await saveWorkspace(schemaFingerprint, workspace);
+    savedRevision = Math.max(savedRevision, savingRevision);
+    autosaveState = savedRevision === dirtyRevision ? "saved" : "pending";
     setRootState();
+    if (autosaveState === "pending") scheduleAutosave();
   } catch (error) {
+    autosaveState = "error";
+    setRootState();
     message.textContent = `Autosave failed: ${error.message}`;
   }
 }
@@ -537,11 +568,13 @@ function populateViews() {
   viewSelect.value = currentView;
 }
 
-function loadAppliedProject(nextSchema, fingerprint, nextWorkspace, { startRunning = true } = {}) {
+function loadAppliedProject(nextSchema, fingerprint, nextWorkspace, { startRunning = true, storedSavedAt = null } = {}) {
   cancelSimulation();
   if (cy) cy.destroy();
   schema = nextSchema;
   schemaFingerprint = fingerprint;
+  lastAutosavedAt = storedSavedAt;
+  autosaveState = storedSavedAt ? "saved" : "idle";
   workspace = { ...nextWorkspace, schemaFingerprint: fingerprint };
   data = buildGraphData(schema, workspace);
   snapshots.clear();
@@ -699,6 +732,7 @@ async function prepareImport(objects, { mode = "workspace" } = {}) {
   }
   const rawWorkspace = separateWorkspace ?? embeddedWorkspace;
   let proposedWorkspace = baseWorkspace;
+  let storedSavedAt = null;
   let fingerprintMismatch = false;
   if (rawWorkspace) {
     const declared = String(rawWorkspace.schemaFingerprint ?? rawWorkspace.schemaHash ?? "");
@@ -707,9 +741,12 @@ async function prepareImport(objects, { mode = "workspace" } = {}) {
     proposedWorkspace.schemaFingerprint = fingerprint;
   } else {
     const stored = await loadWorkspace(fingerprint);
-    if (stored) proposedWorkspace = normalizeWorkspace(stored, fingerprint, nextSchema);
+    if (stored) {
+      proposedWorkspace = normalizeWorkspace(stored.workspace, fingerprint, nextSchema);
+      storedSavedAt = stored.savedAt;
+    }
   }
-  showProposal({ mode, schema: nextSchema, previousSchema: schema, fingerprint, baseWorkspace, proposedWorkspace, hasWorkspace: Boolean(rawWorkspace || proposedWorkspace !== baseWorkspace), fingerprintMismatch });
+  showProposal({ mode, schema: nextSchema, previousSchema: schema, fingerprint, baseWorkspace, proposedWorkspace, hasWorkspace: Boolean(rawWorkspace || proposedWorkspace !== baseWorkspace), fingerprintMismatch, storedSavedAt });
 }
 
 async function importFiles(files, options) {
@@ -744,7 +781,7 @@ function applyPendingImport(include) {
       : mergeWorkspace(pendingProposal.baseWorkspace, pendingProposal.proposedWorkspace, pendingProposal.schema, include);
   merged.schemaFingerprint = pendingProposal.fingerprint;
   const startRunning = pendingProposal.mode === "schema" ? running : true;
-  loadAppliedProject(pendingProposal.schema, pendingProposal.fingerprint, merged, { startRunning });
+  loadAppliedProject(pendingProposal.schema, pendingProposal.fingerprint, merged, { startRunning, storedSavedAt: pendingProposal.storedSavedAt });
   pendingProposal = null;
   setRootState();
   if (importDialog.open) importDialog.close();
@@ -780,23 +817,67 @@ function renderConfig(section = configSection) {
   document.getElementById("config-json").value = JSON.stringify(workspace[section], null, 2);
   document.getElementById("schema-ids").textContent = `Tables\n${schema.tables.map((table) => table.id).join("\n")}\n\nRelationships\n${schema.foreignKeys.map((edge) => `${edge.id}\n  ${edge.sourceTable}.${edge.sourceColumns.join(",")} -> ${edge.targetTable}.${edge.targetColumns.join(",")}`).join("\n")}`;
   document.getElementById("config-error").textContent = "";
+  renderConfigurationImpact();
+}
+
+function definitionList(target, items) {
+  target.replaceChildren(...items.map(({ label, value }) => {
+    const row = document.createElement("div");
+    const term = document.createElement("dt"); term.textContent = label;
+    const description = document.createElement("dd"); description.textContent = String(value);
+    row.append(term, description);
+    return row;
+  }));
+}
+
+function readConfigurationImpact() {
+  const values = JSON.parse(document.getElementById("config-json").value);
+  return analyzeConfiguration(configSection, values, currentWorkspacePayload({ sync: false }), schemaFingerprint, schema);
+}
+
+function renderConfigurationImpact() {
+  const applyButton = document.getElementById("apply-config");
+  try {
+    const impact = readConfigurationImpact();
+    document.getElementById("config-impact-summary").textContent = impact.summary;
+    definitionList(document.getElementById("config-impact-metrics"), impact.metrics);
+    definitionList(document.getElementById("config-impact-details"), impact.details);
+    document.getElementById("config-impact-warnings").replaceChildren(...impact.warnings.map((item) => {
+      const entry = document.createElement("li"); entry.textContent = item.message; return entry;
+    }));
+    document.getElementById("config-impact-preservation").textContent = impact.preservation;
+    document.getElementById("config-error").textContent = "";
+    applyButton.disabled = false;
+    return impact;
+  } catch (error) {
+    document.getElementById("config-impact-summary").textContent = "Configuration cannot be applied.";
+    document.getElementById("config-impact-metrics").replaceChildren();
+    document.getElementById("config-impact-details").replaceChildren();
+    document.getElementById("config-impact-warnings").replaceChildren();
+    document.getElementById("config-impact-preservation").textContent = "";
+    document.getElementById("config-error").textContent = error.message;
+    applyButton.disabled = true;
+    return null;
+  }
 }
 
 function applyConfiguration() {
   try {
-    const values = JSON.parse(document.getElementById("config-json").value);
-    if (!Array.isArray(values)) throw new Error("Configuration must be a JSON array");
     syncSnapshotFromGraph();
-    const candidate = normalizeWorkspace({ ...currentWorkspacePayload(), [configSection]: values }, schemaFingerprint, schema);
-    workspace = candidate;
+    const impact = readConfigurationImpact();
+    workspace = impact.candidate;
     data = buildGraphData(schema, workspace);
     snapshots.clear();
-    currentView = data.views[currentView] ? currentView : "all";
+    const activeViewPreserved = Boolean(data.views[currentView]);
+    currentView = activeViewPreserved ? currentView : "all";
     populateViews();
     rebuildGraph({ fit: true });
     if (running) startSimulation();
     markDirty({ immediate: true });
     configDialog.close();
+    message.textContent = activeViewPreserved
+      ? "Configuration applied. Active view, positions, pins, and gravity settings were preserved."
+      : "Configuration applied. Positions, pins, and gravity settings were preserved; active view changed to All tables.";
   } catch (error) {
     document.getElementById("config-error").textContent = error.message;
   }
@@ -937,6 +1018,7 @@ importDialog.addEventListener("close", () => { if (importDialog.returnValue === 
 
 document.getElementById("configure").addEventListener("click", () => { renderConfig(); configDialog.showModal(); });
 for (const button of document.querySelectorAll("[data-config-tab]")) button.addEventListener("click", () => renderConfig(button.dataset.configTab));
+document.getElementById("config-json").addEventListener("input", renderConfigurationImpact);
 document.getElementById("apply-config").addEventListener("click", applyConfiguration);
 
 document.getElementById("copy-workspace").addEventListener("click", async () => {
@@ -961,12 +1043,15 @@ function automationStatus() {
     dirtyRevision,
     savedRevision,
     dirty: dirtyRevision !== savedRevision,
-    pendingImportProposal: Boolean(pendingProposal)
+    pendingImportProposal: Boolean(pendingProposal),
+    webMcp: webMcpState,
+    autosaveState,
+    lastAutosavedAt
   };
 }
 
 const automation = Object.freeze({
-  version: "1.2.0",
+  version: "1.3.0",
   getStatus: () => structuredClone(automationStatus()),
   getImportProposal: () => structuredClone(importProposalStatus()),
   getWorkspaceJson: () => workspace ? serializeWorkspace(currentWorkspacePayload({ sync: false })) : null,
@@ -983,6 +1068,24 @@ const automation = Object.freeze({
   discardImportProposal: () => automationResponse(discardAutomationImport, "discard-rejected")
 });
 Object.defineProperty(globalThis, "gravityErdAutomation", { value: automation, writable: false, configurable: false });
+
+async function initializeWebMcp() {
+  const modelContext = document.modelContext;
+  if (!modelContext || typeof modelContext.registerTool !== "function") return;
+  webMcpState = "registering";
+  setRootState();
+  try {
+    webMcpRegistration = await registerWebMcpTools(modelContext, automation);
+    webMcpState = "ready";
+  } catch (error) {
+    webMcpState = "error";
+    console.warn("GravityERD WebMCP registration failed", error);
+  }
+  setRootState();
+}
+
+window.addEventListener("pagehide", () => webMcpRegistration?.abort());
+void initializeWebMcp();
 
 setPanelOpen(!matchMedia("(max-width: 800px)").matches);
 setRootState();

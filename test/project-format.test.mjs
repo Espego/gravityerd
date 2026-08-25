@@ -42,6 +42,14 @@ test("schema and workspace import separately or as one project", () => {
   assert.equal(standalone.type, "workspace");
 });
 
+test("column comments survive normalization and project round trips", () => {
+  const commented = structuredClone(source.schema);
+  commented.tables[0].columns[0].comment = "Synthetic identifier comment";
+  const normalized = normalizeSchema(commented);
+  const roundTrip = normalizeProject(JSON.parse(serializeProject(normalized)));
+  assert.equal(roundTrip.project.schema.tables.find((table) => table.id === "users").columns[0].comment, "Synthetic identifier comment");
+});
+
 test("partial merge preserves configuration when only layout is approved", () => {
   const current = createDefaultWorkspace(fingerprint, schema);
   const merged = mergeWorkspace(current, workspace, schema, { configuration: false, layout: true, pins: false });

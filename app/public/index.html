@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <main id="gravityerd-app" class="laboratory" data-testid="app-root" data-ready="false" data-project-loaded="false" data-simulation-phase="idle" data-dirty="false" data-import-proposal="none" data-panel-open="true">
+  <main id="gravityerd-app" class="laboratory" data-testid="app-root" data-ready="false" data-project-loaded="false" data-simulation-phase="idle" data-dirty="false" data-import-proposal="none" data-panel-open="true" data-webmcp="unsupported" data-autosave-state="idle">
     <button id="panel-toggle" data-testid="panel-toggle" class="panel-toggle" type="button" aria-controls="controls-panel" aria-expanded="true" aria-label="Hide controls"><span aria-hidden="true">×</span></button>
     <aside id="controls-panel" class="controls" aria-label="GravityERD controls">
       <header class="app-header">
@@ -31,6 +31,11 @@
         <input id="project-files" data-testid="project-files-input" class="visually-hidden" type="file" accept="application/json,.json" multiple aria-hidden="true" tabindex="-1">
         <input id="schema-file" data-testid="schema-file-input" class="visually-hidden" type="file" accept="application/json,.json" aria-hidden="true" tabindex="-1">
         <button id="configure" data-testid="configure-workspace" type="button" class="wide-action" disabled>Configure workspace</button>
+        <div class="autosave-card">
+          <span class="schema-label">Local autosave</span>
+          <p id="autosave-status" data-testid="autosave-status" class="subtle" aria-live="polite">No workspace loaded</p>
+          <p class="section-help">Autosave stores workspace only in this browser. Use <strong>With schema</strong> for a portable file.</p>
+        </div>
         <p class="section-help">A workspace stores views, gravity settings, positions, and pins. It can be saved with or without its schema.</p>
       </section>
 
@@ -51,15 +56,15 @@
         <section class="control-section sliders" aria-labelledby="realtime-parameters">
           <div class="section-heading"><h2 id="realtime-parameters">Gravity</h2><span class="section-kicker">Realtime weights</span></div>
           <p class="section-help">Changes reheat the current layout without resetting positions or pins.</p>
-          <label><span>Relationship contraction <output data-for="edgeContraction"></output></span><input data-setting="edgeContraction" type="range" min="0" max="6" step="0.05"></label>
-          <label><span>Contraction exponent <output data-for="edgeContractionExponent"></output></span><input data-setting="edgeContractionExponent" type="range" min="1" max="5" step="0.05"></label>
-          <label><span>Repulsion range <output data-for="repulsionRange"></output></span><input data-setting="repulsionRange" type="range" min="40" max="1000" step="10"></label>
-          <label><span>Node repulsion <output data-for="repulsion"></output></span><input data-setting="repulsion" type="range" min="0" max="8" step="0.1"></label>
-          <label><span>Gravity <output data-for="gravity"></output></span><input data-setting="gravity" type="range" min="0" max="8" step="0.1"></label>
-          <label><span>Node gap <output data-for="collisionPadding"></output></span><input data-setting="collisionPadding" type="range" min="0" max="200" step="2"></label>
-          <label><span>Domain attraction <output data-for="domainAttraction"></output></span><input data-setting="domainAttraction" type="range" min="0" max="4" step="0.05"></label>
-          <label><span>Angular fans <output data-for="fanTension"></output></span><input data-setting="fanTension" type="range" min="0" max="4" step="0.05"></label>
-          <label><span>Speed <output data-for="speed"></output></span><input data-setting="speed" type="range" min="0.2" max="6" step="0.1"></label>
+          <label><span>Relationship contraction <output data-for="edgeContraction"></output></span><input aria-label="Relationship contraction" data-setting="edgeContraction" type="range" min="0" max="6" step="0.05"></label>
+          <label><span>Contraction exponent <output data-for="edgeContractionExponent"></output></span><input aria-label="Contraction exponent" data-setting="edgeContractionExponent" type="range" min="1" max="5" step="0.05"></label>
+          <label><span>Repulsion range <output data-for="repulsionRange"></output></span><input aria-label="Repulsion range" data-setting="repulsionRange" type="range" min="40" max="1000" step="10"></label>
+          <label><span>Node repulsion <output data-for="repulsion"></output></span><input aria-label="Node repulsion" data-setting="repulsion" type="range" min="0" max="8" step="0.1"></label>
+          <label><span>Gravity <output data-for="gravity"></output></span><input aria-label="Gravity" data-setting="gravity" type="range" min="0" max="8" step="0.1"></label>
+          <label><span>Node gap <output data-for="collisionPadding"></output></span><input aria-label="Node gap" data-setting="collisionPadding" type="range" min="0" max="200" step="2"></label>
+          <label><span>Domain attraction <output data-for="domainAttraction"></output></span><input aria-label="Domain attraction" data-setting="domainAttraction" type="range" min="0" max="4" step="0.05"></label>
+          <label><span>Angular fans <output data-for="fanTension"></output></span><input aria-label="Angular fans" data-setting="fanTension" type="range" min="0" max="4" step="0.05"></label>
+          <label><span>Speed <output data-for="speed"></output></span><input aria-label="Speed" data-setting="speed" type="range" min="0.2" max="6" step="0.1"></label>
         </section>
 
         <section class="control-section" aria-labelledby="export-heading">
@@ -87,11 +92,11 @@
             <button id="new-seed" data-testid="new-seed" type="button">Random seed</button>
           </div>
           <div class="bootstrap-sliders">
-            <label><span>Ideal relationship length <output data-for="fcoseIdealEdgeLength"></output></span><input data-setting="fcoseIdealEdgeLength" type="range" min="40" max="360" step="10"></label>
-            <label><span>Relationship attraction <output data-for="fcoseAttraction"></output></span><input data-setting="fcoseAttraction" type="range" min="0.1" max="2" step="0.1"></label>
-            <label><span>Node repulsion <output data-for="fcoseRepulsion"></output></span><input data-setting="fcoseRepulsion" type="range" min="0.1" max="4" step="0.1"></label>
-            <label><span>Gravity <output data-for="fcoseGravity"></output></span><input data-setting="fcoseGravity" type="range" min="0" max="4" step="0.1"></label>
-            <label><span>Iterations <output data-for="fcoseIterations"></output></span><input data-setting="fcoseIterations" type="range" min="50" max="600" step="10"></label>
+            <label><span>Ideal relationship length <output data-for="fcoseIdealEdgeLength"></output></span><input aria-label="Ideal relationship length" data-setting="fcoseIdealEdgeLength" type="range" min="40" max="360" step="10"></label>
+            <label><span>Relationship attraction <output data-for="fcoseAttraction"></output></span><input aria-label="Bootstrap relationship attraction" data-setting="fcoseAttraction" type="range" min="0.1" max="2" step="0.1"></label>
+            <label><span>Node repulsion <output data-for="fcoseRepulsion"></output></span><input aria-label="Bootstrap node repulsion" data-setting="fcoseRepulsion" type="range" min="0.1" max="4" step="0.1"></label>
+            <label><span>Gravity <output data-for="fcoseGravity"></output></span><input aria-label="Bootstrap gravity" data-setting="fcoseGravity" type="range" min="0" max="4" step="0.1"></label>
+            <label><span>Iterations <output data-for="fcoseIterations"></output></span><input aria-label="Bootstrap iterations" data-setting="fcoseIterations" type="range" min="50" max="600" step="10"></label>
           </div>
         </details>
       </section>
@@ -150,6 +155,14 @@
         <p class="subtle">Edit a JSON list. Stable table and relationship IDs are shown below.</p>
         <div class="config-tabs" role="tablist"><button type="button" role="tab" aria-selected="true" data-config-tab="domains">Domains</button><button type="button" role="tab" aria-selected="false" data-config-tab="views">Views</button><button type="button" role="tab" aria-selected="false" data-config-tab="edgeGroups">Relationship groups</button></div>
         <label>Configuration JSON<textarea id="config-json" data-testid="config-json" spellcheck="false"></textarea></label>
+        <section id="config-impact" data-testid="config-impact" class="config-impact">
+          <h3>Impact before applying</h3>
+          <p id="config-impact-summary" data-testid="config-impact-summary" aria-live="polite" aria-atomic="true"></p>
+          <dl id="config-impact-metrics" class="impact-metrics"></dl>
+          <details><summary>Detailed matches</summary><dl id="config-impact-details" class="impact-details"></dl></details>
+          <ul id="config-impact-warnings" data-testid="config-impact-warnings" class="impact-warnings"></ul>
+          <p id="config-impact-preservation" class="subtle"></p>
+        </section>
         <details><summary>Available stable IDs</summary><pre id="schema-ids"></pre></details><p id="config-error" class="warning" role="alert"></p>
         <footer><button value="cancel" type="submit">Cancel</button><button id="apply-config" data-testid="apply-config" type="button" class="primary">Apply configuration</button></footer>
       </form>

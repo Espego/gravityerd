@@ -199,7 +199,7 @@ test("automation API imports and exports without file or clipboard access", asyn
   const projectJson = JSON.stringify(project);
   await page.goto("/");
   await expect(page.getByTestId("app-root")).toHaveAttribute("data-ready", "true");
-  expect(await page.evaluate(() => globalThis.gravityErdAutomation.version)).toBe("1.2.0");
+  expect(await page.evaluate(() => globalThis.gravityErdAutomation.version)).toBe("1.3.0");
   expect(await page.evaluate(() => {
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, "gravityErdAutomation");
     return { frozen: Object.isFrozen(globalThis.gravityErdAutomation), writable: descriptor.writable, configurable: descriptor.configurable };
@@ -252,20 +252,136 @@ test("automation API imports and exports without file or clipboard access", asyn
   expect(schemaApplied.ok).toBe(true);
 });
 
-test("workspace configuration is editable through stable controls", async ({ page }) => {
+test("workspace configuration is editable through stable controls", async ({ page }, testInfo) => {
   await loadExample(page);
+  await page.getByTestId("simulation-toggle").click();
+  await expect(page.getByTestId("app-root")).toHaveAttribute("data-autosave-state", "saved");
+  const before = JSON.parse(await page.evaluate(() => globalThis.gravityErdAutomation.getProjectJson()));
+  const nodeBefore = await page.evaluate(() => globalThis.gravityErdAutomation.getNode("tickets"));
   await page.getByTestId("configure-workspace").click();
   await expect(page.getByTestId("workspace-config-dialog")).toBeVisible();
   const dialogBounds = await page.getByTestId("workspace-config-dialog").boundingBox();
   const applyBounds = await page.getByTestId("apply-config").boundingBox();
   expect(applyBounds.x + applyBounds.width).toBeLessThanOrEqual(dialogBounds.x + dialogBounds.width);
   expect(await page.getByTestId("workspace-config-dialog").evaluate((dialog) => dialog.scrollWidth <= dialog.clientWidth)).toBe(true);
+  await page.getByRole("tab", { name: "Relationship groups" }).click();
+  await expect(page.getByTestId("config-impact-summary")).toContainText("8 relationships are assigned");
+  await expect(page.locator("#config-impact-details")).toContainText("2 relationships (0 explicit, 2 by rule)");
+  const impactScreenshot = testInfo.outputPath("configuration-impact.png");
+  await page.screenshot({ path: impactScreenshot });
+  await testInfo.attach("configuration impact", { path: impactScreenshot, contentType: "image/png" });
+  await page.getByTestId("config-json").fill("{");
+  await expect(page.getByTestId("apply-config")).toBeDisabled();
+  await expect(page.locator("#config-error")).not.toBeEmpty();
+  await page.getByRole("tab", { name: "Domains" }).click();
   const domains = JSON.parse(await page.getByTestId("config-json").inputValue());
   domains.find((domain) => domain.id === "support").name = "Support workflow";
   await page.getByTestId("config-json").fill(JSON.stringify(domains));
+  await expect(page.getByTestId("apply-config")).toBeEnabled();
+  await expect(page.getByTestId("config-impact-summary")).toContainText("7 tables across 4 domains");
   await page.getByTestId("apply-config").click();
   const project = JSON.parse(await page.evaluate(() => globalThis.gravityErdAutomation.getProjectJson()));
   expect(project.workspace.domains.find((domain) => domain.id === "support").name).toBe("Support workflow");
+  expect(project.workspace.activeView).toBe(before.workspace.activeView);
+  expect(project.workspace.snapshots.find((snapshot) => snapshot.view === "all").settings).toEqual(before.workspace.snapshots.find((snapshot) => snapshot.view === "all").settings);
+  const nodeAfter = await page.evaluate(() => globalThis.gravityErdAutomation.getNode("tickets"));
+  expect(nodeAfter.position).toEqual(nodeBefore.position);
+  expect(nodeAfter.pinned).toBe(nodeBefore.pinned);
+  await expect(page.locator("#message")).toContainText("Active view, positions, pins, and gravity settings were preserved");
+  await expect(page.getByTestId("app-root")).toHaveAttribute("data-autosave-state", "saved");
+  await expect(page.getByTestId("autosave-status")).toContainText("Autosaved locally");
+  const status = await page.evaluate(() => globalThis.gravityErdAutomation.getStatus());
+  expect(status.autosaveState).toBe("saved");
+  expect(status.lastAutosavedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/u);
+});
+
+test("WebMCP tools reuse the visible fingerprint-bound proposal flow", async ({ page }) => {
+  const projectJson = await readFile(workspaceFile("examples", "helpdesk.project.gravityerd.json"), "utf8");
+  await page.addInitScript(() => {
+    const tools = new Map();
+    const modelContext = {
+      async registerTool(tool) { tools.set(tool.name, tool); }
+    };
+    Object.defineProperty(document, "modelContext", { configurable: true, value: modelContext });
+    globalThis.__gravityerdWebMcpTools = tools;
+  });
+  await page.goto("/");
+  await expect(page.getByTestId("app-root")).toHaveAttribute("data-webmcp", "ready");
+  const names = await page.evaluate(() => [...globalThis.__gravityerdWebMcpTools.keys()].sort());
+  expect(names).toHaveLength(9);
+  expect(names).toContain("gravityerd_propose_import");
+
+  const proposed = await page.evaluate(async (documentText) => {
+    const tool = globalThis.__gravityerdWebMcpTools.get("gravityerd_propose_import");
+    return tool.execute({ documents: [documentText] });
+  }, projectJson);
+  expect(proposed.ok).toBe(true);
+  expect(proposed.value.summary).toMatchObject({ tables: 7, relationships: 8 });
+  await expect(page.getByTestId("import-proposal-dialog")).toBeVisible();
+
+  const stale = await page.evaluate(async () => {
+    const tool = globalThis.__gravityerdWebMcpTools.get("gravityerd_apply_import_proposal");
+    return tool.execute({ expectedFingerprint: "0".repeat(64), configuration: true, layout: true, pins: true });
+  });
+  expect(stale.error.code).toBe("stale-proposal");
+  const applied = await page.evaluate(async (expectedFingerprint) => {
+    const tool = globalThis.__gravityerdWebMcpTools.get("gravityerd_apply_import_proposal");
+    return tool.execute({ expectedFingerprint, configuration: true, layout: true, pins: true });
+  }, proposed.value.fingerprint);
+  expect(applied.ok).toBe(true);
+  await expect(page.getByTestId("app-root")).toHaveAttribute("data-project-loaded", "true");
+});
+
+test("autosave reads legacy workspace values and reports storage failures", async ({ page }) => {
+  await loadExample(page);
+  await page.getByTestId("simulation-toggle").click();
+  await expect(page.getByTestId("app-root")).toHaveAttribute("data-autosave-state", "saved");
+  const project = JSON.parse(await page.evaluate(() => globalThis.gravityErdAutomation.getProjectJson()));
+  const fingerprint = project.workspace.schemaFingerprint;
+  await page.evaluate(async ({ key, value }) => {
+    const database = await new Promise((resolve, reject) => {
+      const request = indexedDB.open("gravityerd", 1);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    await new Promise((resolve, reject) => {
+      const request = database.transaction("workspaces", "readwrite").objectStore("workspaces").put(value, key);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+    database.close();
+  }, { key: fingerprint, value: project.workspace });
+  delete project.workspace;
+  await page.goto("/");
+  const proposed = await page.evaluate((contents) => globalThis.gravityErdAutomation.proposeImport([contents]), JSON.stringify(project));
+  expect(proposed.ok).toBe(true);
+  expect(proposed.value.summary.pins).toBe(2);
+  await page.evaluate(() => globalThis.gravityErdAutomation.discardImportProposal());
+
+  await page.addInitScript(() => {
+    const originalPut = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function put(value, key) {
+      if (key && typeof key === "string" && key.length === 64) throw new DOMException("Storage blocked for test", "QuotaExceededError");
+      return originalPut.call(this, value, key);
+    };
+  });
+  await page.reload();
+  const failureProposal = await page.evaluate((contents) => globalThis.gravityErdAutomation.proposeImport([contents]), JSON.stringify(project));
+  expect(failureProposal.ok).toBe(true);
+  await page.evaluate((expectedFingerprint) => globalThis.gravityErdAutomation.applyImportProposal({
+    expectedFingerprint, configuration: true, layout: true, pins: true
+  }), failureProposal.value.fingerprint);
+  await expect(page.getByTestId("app-root")).toHaveAttribute("data-autosave-state", "error");
+  await expect(page.getByTestId("autosave-status")).toContainText("Autosave failed");
+});
+
+test("visible interactive controls have accessible names", async ({ page }) => {
+  await loadExample(page);
+  await page.getByTestId("configure-workspace").click();
+  const controls = page.locator('button:visible, select:visible, textarea:visible, input[type="range"]:visible, input[type="number"]:visible');
+  const count = await controls.count();
+  expect(count).toBeGreaterThan(10);
+  for (let index = 0; index < count; index += 1) await expect(controls.nth(index)).toHaveAccessibleName(/\S/u);
 });
 
 test("off-canvas controls, replacement warning, and schema-only update preserve workspace state", async ({ page }, testInfo) => {

@@ -29,34 +29,24 @@ make test
 make security
 ```
 
-Test targets remove their containers even after an interruption. Named dependency caches remain for faster subsequent runs; `make clean` removes containers and project volumes. Default Compose memory and CPU limits can be overridden with `GRAVITYERD_NODE_MEMORY`, `GRAVITYERD_DATABASE_MEMORY`, `GRAVITYERD_GO_MEMORY`, `GRAVITYERD_PLAYWRIGHT_MEMORY`, and their corresponding `_CPUS` variables.
+Test targets remove their containers even after an interruption. Named dependency caches remain for faster subsequent runs; `make clean` removes containers and project volumes. Default Compose memory and CPU limits can be overridden with `GRAVITYERD_NODE_MEMORY`, `GRAVITYERD_PLAYWRIGHT_MEMORY`, and their corresponding `_CPUS` variables.
 
-## Export a schema
+## Create a schema file
 
-The exporter performs read-only metadata introspection. Credentials are read only from `DATABASE_URL` and are never written to the JSON.
+GravityERD never connects to a database. Give an agent a schema-only DDL file or metadata obtained with your own trusted database tools, then ask it to produce `gravityerd-project` JSON according to the public format.
 
-```sh
-docker compose run --rm -e DATABASE_URL schema-export \
-  postgres --schema public --output /output/schema.gravityerd.json
-
-docker compose run --rm -e DATABASE_URL schema-export \
-  mysql --database app --output /output/schema.gravityerd.json
-```
-
-Mount a writable local directory at `/output` when overriding the Compose service. Repeat `--exclude-table table_name` to omit tables.
-
-Files written by the exporter are replaced atomically with owner-only permissions. Standard output is unchanged.
-For a non-local database, configure certificate-verified TLS in `DATABASE_URL`; disable TLS only on an isolated local development network.
+The exact PostgreSQL/MySQL workflow, stable-ID rules, mapping, validation checklist, and a ready-to-use agent prompt are in `docs/schema-authoring.md`. Schema metadata may itself be sensitive; keep the DDL and generated JSON local.
 
 ## Files and automation
 
 - `docs/formats.md` documents the public JSON formats.
+- `docs/schema-authoring.md` explains how to create schema JSON without giving GravityERD database access.
 - `docs/physics.md` explains the layout model and controls.
 - `docs/playwright-mcp.md` is the supported Playwright MCP and human-review workflow.
 - `docs/security-review.md` records the security model, remediated findings, and residual risks.
 - `automation-contract.json` is the machine-readable stable UI contract.
 - `?example=helpdesk` opens the public synthetic example.
 
-Agents without file chooser or clipboard access can use the versioned `globalThis.gravityErdAutomation` API from Playwright evaluation. `proposeImport()` accepts serialized workspace JSON and opens the normal visible proposal; `proposeSchemaUpdate()` refreshes only schema metadata. `applyImportProposal()` requires the exact proposal fingerprint and explicit configuration, layout, and pin choices. `getProjectJson()` and `getWorkspaceJson()` return exports directly for terminal-side file writing. The documented view-slice workflow lets agents edit `workspace.views` with stable schema table IDs while preserving layout and pins. See `llms.txt`, `automation-contract.json`, and `docs/playwright-mcp.md` for the complete contract.
+In supported secure-context browsers, GravityERD registers feature-detected `gravityerd_*` WebMCP tools through `document.modelContext`. The versioned `globalThis.gravityErdAutomation` API remains a compatible fallback for Playwright environments that execute in the actual page realm. Both surfaces reuse the same validation and merge functions: proposals are visible, fingerprint-bound, and require explicit configuration, layout, and pin choices. `getProjectJson()` and `getWorkspaceJson()` return exports directly for terminal-side file writing. See `llms.txt`, `automation-contract.json`, and `docs/playwright-mcp.md` for the complete contract.
 
 The repository is MIT licensed. Report vulnerabilities through the private process in `SECURITY.md`.

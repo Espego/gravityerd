@@ -103,6 +103,8 @@ h1 { margin: 0; font-size: 30px; line-height: 1.1; }
   border-radius: 9px;
   background: light-dark(#eaf1f5, #22303d);
 }
+.autosave-card { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: light-dark(#edf3f6, #1d2a34); }
+.autosave-card p { margin: 4px 0 0; }
 .schema-label { color: light-dark(#236878, #86d5e6); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .schema-card p { margin: 4px 0 0; overflow-wrap: anywhere; }
 
@@ -269,6 +271,15 @@ dialog::backdrop { background: rgba(13, 20, 27, .55); }
 .config-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
 .config-tabs button[aria-selected="true"] { border-color: #28798a; background: light-dark(#d9f0f5, #24434a); }
 #config-json { min-height: 280px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.config-impact { margin-top: 12px; padding: 14px; border: 1px solid light-dark(#ccd8df, #40505d); border-radius: 10px; background: light-dark(#f5f8fa, #18232c); }
+.config-impact h3 { margin: 0 0 8px; font-size: 14px; }
+.config-impact p { margin: 6px 0; }
+.impact-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; margin: 10px 0; }
+.impact-metrics div, .impact-details div { display: flex; justify-content: space-between; gap: 12px; }
+.impact-metrics dt, .impact-details dt { color: light-dark(#526372, #b0bec9); }
+.impact-metrics dd, .impact-details dd { margin: 0; font-weight: 700; text-align: right; }
+.impact-details { display: grid; gap: 4px; margin: 8px 0; font-size: 12px; }
+.impact-warnings { margin: 10px 0; padding-left: 20px; color: light-dark(#8a4f00, #ffc36a); font-size: 12px; }
 #schema-ids { max-height: 220px; overflow: auto; white-space: pre-wrap; font-size: 11px; }
 
 @media (max-width: 800px) {

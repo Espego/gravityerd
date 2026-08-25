@@ -1,6 +1,6 @@
 # Playwright and agent workflow
 
-GravityERD exposes a frozen, versioned browser automation surface. Normal browser work uses real controls. Agents that cannot access a file chooser or clipboard may use the narrow two-phase import bridge; it opens the same visible proposal and applies through the same validation and merge functions as a UI import.
+GravityERD exposes a frozen, versioned browser automation surface and feature-detected WebMCP tools. Normal browser work uses real controls. Agents that cannot access a file chooser or clipboard may use WebMCP or the compatible page-global bridge; both open the same visible proposal and apply through the same validation and merge functions as a UI import.
 
 ## Concepts
 
@@ -10,6 +10,14 @@ GravityERD exposes a frozen, versioned browser automation surface. Normal browse
 - A workspace exported **without schema** has the version 1 kind `gravityerd-workspace`.
 
 The left control panel is off-canvas on small screens. If a required control is not visible, click `[data-testid="panel-toggle"]` and wait for `data-panel-open="true"`.
+
+## Prefer WebMCP when available
+
+Wait for `[data-testid="app-root"]` and inspect `data-webmcp`. When it is `ready`, use the discovered `gravityerd_*` tools. Read-only tools inspect status, proposal, exports, and one table. Mutation tools propose an import or schema update, apply the exact fingerprint-bound proposal, or discard it.
+
+WebMCP is an adapter over the same versioned automation facade. `gravityerd_propose_import` and `gravityerd_propose_schema_update` always open the normal visible proposal. `gravityerd_apply_import_proposal` still requires the exact returned fingerprint and explicit `configuration`, `layout`, and `pins` booleans. No WebMCP method bypasses validation or human-visible state.
+
+If `data-webmcp` is `unsupported` or `error`, use the real file chooser. Use `globalThis.gravityErdAutomation` only when the automation environment can execute in the actual page realm.
 
 ## Load a workspace through the UI
 
@@ -62,7 +70,7 @@ const applied = await page.evaluate(
 if (!applied.ok) throw new Error(applied.error.message);
 ```
 
-## Import from a terminal without file upload
+## Page-global fallback without file upload
 
 `globalThis.gravityErdAutomation.proposeImport()` accepts an array containing one workspace-with-schema JSON string and optionally one workspace-only JSON string. Each document must be a JSON object and is limited to 16 MiB. It validates through the normal path and opens the normal proposal without changing current state.
 
@@ -132,7 +140,7 @@ const proposal = await page.evaluate(() => globalThis.gravityErdAutomation.getIm
 const node = await page.evaluate(() => globalThis.gravityErdAutomation.getNode("tickets"));
 ```
 
-`getStatus()` reports fingerprint, active view, simulation phase, movement, proposal state, and dirty revision. `getImportProposal()` reports proposal mode, fingerprint, and summary. `getNode(id)` reports stored/rendered position, pin state, and domain.
+`getStatus()` reports fingerprint, active view, simulation phase, movement, proposal state, dirty revision, autosave state/time, and WebMCP registration state. `getImportProposal()` reports proposal mode, fingerprint, and summary. `getNode(id)` reports stored/rendered position, pin state, and domain.
 
 For a human-in-the-loop handoff, leave the tab open. After the user finishes manual placement, re-read state, pause through the real button, write `getWorkspaceJson()` with private permissions, then propose it again to verify a fingerprint- and content-exact round trip.
 
