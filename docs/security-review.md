@@ -19,7 +19,7 @@ Database credentials and imported schema metadata are trusted only at the CLI pr
 | GERD-05 | Medium | GitHub Actions used movable major tags and checkout credentials remained available to later steps. | Official actions are pinned to verified commit SHAs, checkout credential persistence is disabled, and permissions are assigned per job. |
 | GERD-06 | Low | A malformed encoded URL could terminate the local server request handler. | URL decoding failures return 400; traversal attempts and unsupported methods have explicit responses and tests. |
 | GERD-07 | Low | CLI file output was written directly with group/world-readable default permissions and followed an existing symlink. | Output is written to a private temporary file, synced, and atomically renamed with mode `0600`; stdout behavior is unchanged. |
-| GERD-08 | Low | A direct automation mutation surface could bypass import review or apply a stale proposal. | The API only accepts one or two bounded JSON strings, always opens the visible normal proposal, returns a fingerprint, and requires that exact fingerprint plus three explicit merge choices before applying through the shared UI merge path. |
+| GERD-08 | Low | A direct automation mutation surface could bypass import review or apply a stale proposal. | Workspace and schema-only methods accept bounded JSON strings, always open a visible normal proposal, return a fingerprint, and require that exact fingerprint plus explicit merge choices before applying through the shared UI path. Schema refresh rejects workspace merge choices. |
 
 ## Validation
 

@@ -26,6 +26,9 @@ test("public example has stable documented counts and fingerprint", () => {
   assert.equal(workspace.views.length, 2);
   assert.equal(workspace.edgeGroups.length, 3);
   assert.equal(workspace.snapshots[0].pinned.length, 2);
+  assert.deepEqual(workspace.snapshots[0].pinned, ["tickets", "users"]);
+  assert.equal(workspace.snapshots[0].settings.edgeContraction, 1.5);
+  assert.equal(workspace.snapshots[0].settings.fanTension, 0.1);
   assert.match(fingerprint, /^[a-f0-9]{64}$/);
 });
 

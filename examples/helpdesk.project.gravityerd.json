@@ -500,14 +500,14 @@
           "fcoseRepulsion": 1,
           "fcoseGravity": 1,
           "fcoseIterations": 240,
-          "edgeContraction": 1,
+          "edgeContraction": 1.5,
           "edgeContractionExponent": 1.65,
           "repulsionRange": 220,
           "repulsion": 1,
           "gravity": 1,
           "collisionPadding": 24,
           "domainAttraction": 1.25,
-          "fanTension": 0.45,
+          "fanTension": 0.1,
           "auditWeight": 0.15,
           "showAuditEdges": false,
           "speed": 1
@@ -543,7 +543,7 @@
           }
         },
         "pinned": [
-          "customers",
+          "tickets",
           "users"
         ]
       }

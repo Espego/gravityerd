@@ -5,8 +5,7 @@ import {
   PHYSICS_MODEL,
   activePhysicsEdges,
   clonePositions,
-  initialPositions,
-  physicsMetrics
+  initialPositions
 } from "./physics-core.mjs";
 import { fcoseOptions } from "./physics-engines.mjs";
 import { createDrawioExport } from "./physics-export.mjs";
@@ -33,19 +32,21 @@ import { loadStoredWorkspace as loadWorkspace, saveStoredWorkspace as saveWorksp
 cytoscape.use(fcose);
 
 const AUTOSAVE_DELAY = 700;
-const DIAGNOSTICS_INTERVAL = 500;
 const app = document.getElementById("gravityerd-app");
 const graphElement = document.getElementById("graph");
 const graphLabels = document.getElementById("graph-labels");
 const workspaceElement = graphElement.parentElement;
+const panelToggle = document.getElementById("panel-toggle");
+const controlsPanel = document.getElementById("controls-panel");
 const viewSelect = document.getElementById("view-select");
 const seedInput = document.getElementById("seed");
 const runToggle = document.getElementById("run-toggle");
-const runStatus = document.getElementById("run-status");
 const message = document.getElementById("message");
 const settingInputs = [...document.querySelectorAll("[data-setting]")];
 const importDialog = document.getElementById("import-dialog");
 const configDialog = document.getElementById("config-dialog");
+const workspaceWarningDialog = document.getElementById("workspace-warning-dialog");
+const unlockDialog = document.getElementById("unlock-dialog");
 
 let schema = null;
 let schemaFingerprint = null;
@@ -58,7 +59,6 @@ let frame = 0;
 let layout = null;
 let disposedLayoutGeneration = 0;
 let currentView = "all";
-let lastDiagnosticsAt = 0;
 let lastMovement = 0;
 let autosaveTimer = 0;
 let dirtyRevision = 0;
@@ -158,10 +158,9 @@ function snapshotPayload(snapshot) {
 
 function exportSnapshots({ sync = true } = {}) {
   if (sync) syncSnapshotFromGraph();
-  for (const view of workspace.views) {
-    if (!snapshots.has(view.id)) continue;
-  }
-  return [...snapshots.values()].map(snapshotPayload).sort((first, second) => first.view.localeCompare(second.view));
+  const exported = new Map(workspace.snapshots.map((snapshot) => [snapshot.view, snapshotPayload(snapshot)]));
+  for (const snapshot of snapshots.values()) exported.set(snapshot.view, snapshotPayload(snapshot));
+  return [...exported.values()].sort((first, second) => first.view.localeCompare(second.view));
 }
 
 function currentWorkspacePayload({ sync = true } = {}) {
@@ -366,22 +365,12 @@ function renderControls() {
     const output = document.querySelector(`[data-for="${input.dataset.setting}"]`);
     if (output) output.value = String(snapshot.settings[input.dataset.setting]);
   }
-  runToggle.textContent = running ? "Stop" : "Run";
-  runStatus.textContent = !running ? "Simulation stopped" : phase === "bootstrap" ? "Running · fCoSE bootstrap" : "Running · realtime gravity";
+  runToggle.textContent = running ? "Pause" : "Play";
+  runToggle.setAttribute("aria-label", running ? "Pause gravity simulation" : "Play gravity simulation");
+  const pinCount = snapshot.pinned.length;
+  document.getElementById("pin-count").textContent = `${pinCount} ${pinCount === 1 ? "pin" : "pins"}`;
+  document.getElementById("unlock").disabled = pinCount === 0;
   setRootState();
-}
-
-function renderMetricValues(metrics) {
-  lastMovement = Number(metrics.movement ?? lastMovement);
-  for (const [name, value] of Object.entries(metrics)) {
-    const element = document.querySelector(`[data-metric="${name}"]`);
-    if (element) element.textContent = Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(value);
-  }
-}
-
-function renderMetrics(movement = 0) {
-  const snapshot = currentSnapshot();
-  if (snapshot) renderMetricValues(physicsMetrics(data.views[currentView], snapshot.positions, snapshot.settings, movement));
 }
 
 async function persistWorkspace() {
@@ -424,15 +413,12 @@ async function realtimeLoop() {
   if (!running) return;
   const generation = disposedLayoutGeneration;
   const snapshot = currentSnapshot();
-  const now = performance.now();
-  const includeDiagnostics = now - lastDiagnosticsAt >= DIAGNOSTICS_INTERVAL;
   try {
-    const result = await runPhysicsTask("relax", { view: data.views[currentView], positions: snapshot.positions, pinned: snapshot.pinned, settings: snapshot.settings, options: { includeDiagnostics } });
+    const result = await runPhysicsTask("relax", { view: data.views[currentView], positions: snapshot.positions, pinned: snapshot.pinned, settings: snapshot.settings, options: { includeDiagnostics: false } });
     if (result.cancelled || generation !== disposedLayoutGeneration || !running) return;
     snapshot.positions = result.positions;
     applyPositions(snapshot.positions);
-    renderMetricValues({ ...result.metrics, movement: result.movement });
-    if (includeDiagnostics) lastDiagnosticsAt = now;
+    lastMovement = Number(result.movement ?? lastMovement);
     markDirty();
     frame = requestAnimationFrame(realtimeLoop);
   } catch (error) {
@@ -491,6 +477,7 @@ function toggleNodePin(node) {
   if (node.hasClass("pinned")) node.removeClass("pinned");
   else node.addClass("pinned");
   syncSnapshotFromGraph();
+  renderControls();
   markDirty({ immediate: true });
   if (running) startSimulation();
 }
@@ -515,7 +502,7 @@ function bindGraphEvents() {
     const end = event.target.position();
     if (start && Math.hypot(end.x - start.x, end.y - start.y) >= 3) event.target.addClass("pinned");
     syncSnapshotFromGraph();
-    renderMetrics();
+    renderControls();
     markDirty({ immediate: true });
     if (running) startSimulation();
   });
@@ -537,7 +524,6 @@ function rebuildGraph({ fit = false } = {}) {
   rebuildNodeLabels();
   if (fit) cy.fit(cy.elements(), 70);
   renderControls();
-  renderMetrics();
 }
 
 function populateViews() {
@@ -551,7 +537,7 @@ function populateViews() {
   viewSelect.value = currentView;
 }
 
-function loadAppliedProject(nextSchema, fingerprint, nextWorkspace) {
+function loadAppliedProject(nextSchema, fingerprint, nextWorkspace, { startRunning = true } = {}) {
   cancelSimulation();
   if (cy) cy.destroy();
   schema = nextSchema;
@@ -562,13 +548,17 @@ function loadAppliedProject(nextSchema, fingerprint, nextWorkspace) {
   currentView = data.views[workspace.activeView] ? workspace.activeView : "all";
   populateViews();
   document.getElementById("simulation-controls").hidden = false;
-  document.getElementById("workspace-bar").hidden = false;
+  document.getElementById("configure").disabled = false;
   document.getElementById("empty-state").hidden = true;
   document.getElementById("schema-status").textContent = `${schema.tables.length} tables · ${schema.foreignKeys.length} relationships · ${schemaFingerprint.slice(0, 12)}`;
-  running = true;
+  running = startRunning;
   currentSnapshot();
   rebuildGraph({ fit: true });
-  startSimulation();
+  if (running) startSimulation();
+  else {
+    phase = "stopped";
+    renderControls();
+  }
   markDirty({ immediate: true });
 }
 
@@ -629,6 +619,7 @@ function proposalPairs(summary) {
 function importProposalStatus() {
   if (!pendingProposal) return null;
   return {
+    mode: pendingProposal.mode,
     fingerprint: pendingProposal.fingerprint,
     fingerprintMismatch: pendingProposal.fingerprintMismatch,
     hasWorkspace: pendingProposal.hasWorkspace,
@@ -638,7 +629,13 @@ function importProposalStatus() {
 
 function showProposal(proposal) {
   pendingProposal = proposal;
+  const schemaOnly = proposal.mode === "schema";
   const summary = proposalSummary(proposal.schema, proposal.baseWorkspace, proposal.proposedWorkspace, proposal.previousSchema);
+  document.getElementById("import-eyebrow").textContent = schemaOnly ? "Schema refresh" : "Review before applying";
+  document.getElementById("import-title").textContent = schemaOnly ? "Schema update proposal" : "Workspace proposal";
+  document.getElementById("import-description").textContent = schemaOnly
+    ? "Only schema metadata changes. Matching views, gravity settings, positions, and pins stay in the current workspace."
+    : "Choose which parts of the imported workspace should replace the current workspace.";
   document.getElementById("import-fingerprint").textContent = `Schema fingerprint: ${proposal.fingerprint}`;
   document.getElementById("import-summary").replaceChildren(...proposalPairs(summary).map(([label, value]) => {
     const item = document.createElement("div");
@@ -647,17 +644,22 @@ function showProposal(proposal) {
     item.append(term, description);
     return item;
   }));
-  document.getElementById("apply-layout").checked = proposal.hasWorkspace;
-  document.getElementById("apply-pins").checked = proposal.hasWorkspace;
-  document.getElementById("apply-configuration").checked = proposal.hasWorkspace;
-  document.getElementById("import-warning").textContent = proposal.fingerprintMismatch
-    ? "The workspace fingerprint differs. Only matching stable IDs are eligible for merge."
-    : "Nothing changes until you apply this proposal.";
+  document.getElementById("workspace-merge-options").hidden = schemaOnly;
+  document.getElementById("apply-layout").checked = !schemaOnly && proposal.hasWorkspace;
+  document.getElementById("apply-pins").checked = !schemaOnly && proposal.hasWorkspace;
+  document.getElementById("apply-configuration").checked = !schemaOnly && proposal.hasWorkspace;
+  document.getElementById("apply-import").textContent = schemaOnly ? "Update schema" : "Apply proposal";
+  document.getElementById("import-warning").textContent = schemaOnly
+    ? "Embedded workspace values in the selected file are ignored."
+    : proposal.fingerprintMismatch
+      ? "The workspace fingerprint differs. Only matching stable IDs are eligible for merge."
+      : "Nothing changes until you apply this proposal.";
   setRootState();
+  importDialog.returnValue = "";
   importDialog.showModal();
 }
 
-async function prepareImport(objects) {
+async function prepareImport(objects, { mode = "workspace" } = {}) {
   let project = null;
   let embeddedWorkspace = null;
   let separateWorkspace = null;
@@ -673,12 +675,28 @@ async function prepareImport(objects) {
       embeddedWorkspace = normalized.workspace;
     }
   }
+  if (mode === "schema" && (!project || objects.length !== 1)) {
+    throw new Error("Select one GravityERD file containing a schema");
+  }
   const nextSchema = project?.schema ?? schema;
   if (!nextSchema) throw new Error("Import a GravityERD project containing a schema first");
   const fingerprint = await fingerprintSchema(nextSchema);
   const baseWorkspace = workspace
     ? normalizeWorkspace({ ...currentWorkspacePayload(), schemaFingerprint: fingerprint }, fingerprint, nextSchema)
     : createDefaultWorkspace(fingerprint, nextSchema);
+  if (mode === "schema") {
+    showProposal({
+      mode,
+      schema: nextSchema,
+      previousSchema: schema,
+      fingerprint,
+      baseWorkspace,
+      proposedWorkspace: baseWorkspace,
+      hasWorkspace: false,
+      fingerprintMismatch: false
+    });
+    return;
+  }
   const rawWorkspace = separateWorkspace ?? embeddedWorkspace;
   let proposedWorkspace = baseWorkspace;
   let fingerprintMismatch = false;
@@ -691,28 +709,42 @@ async function prepareImport(objects) {
     const stored = await loadWorkspace(fingerprint);
     if (stored) proposedWorkspace = normalizeWorkspace(stored, fingerprint, nextSchema);
   }
-  showProposal({ schema: nextSchema, previousSchema: schema, fingerprint, baseWorkspace, proposedWorkspace, hasWorkspace: Boolean(rawWorkspace || proposedWorkspace !== baseWorkspace), fingerprintMismatch });
+  showProposal({ mode, schema: nextSchema, previousSchema: schema, fingerprint, baseWorkspace, proposedWorkspace, hasWorkspace: Boolean(rawWorkspace || proposedWorkspace !== baseWorkspace), fingerprintMismatch });
 }
 
-async function importFiles(files) {
+async function importFiles(files, options) {
   const objects = [];
   for (const file of files) objects.push(JSON.parse(await file.text()));
-  await prepareImport(objects);
+  await prepareImport(objects, options);
 }
 
 async function proposeAutomationImport(documents) {
   if (pendingProposal) throw new AutomationRequestError("proposal-pending", "Apply or discard the current import proposal first");
-  if (configDialog.open) throw new AutomationRequestError("dialog-open", "Close the workspace configuration dialog first");
-  await prepareImport(parseAutomationDocuments(documents));
+  if (document.querySelector("dialog[open]")) throw new AutomationRequestError("dialog-open", "Close the open dialog first");
+  await prepareImport(parseAutomationDocuments(documents), { mode: "workspace" });
   message.textContent = "Import proposal created by automation.";
+  return importProposalStatus();
+}
+
+async function proposeAutomationSchemaUpdate(documentText) {
+  if (pendingProposal) throw new AutomationRequestError("proposal-pending", "Apply or discard the current import proposal first");
+  if (document.querySelector("dialog[open]")) throw new AutomationRequestError("dialog-open", "Close the open dialog first");
+  await prepareImport(parseAutomationDocuments([documentText]), { mode: "schema" });
+  message.textContent = "Schema update proposal created by automation.";
   return importProposalStatus();
 }
 
 function applyPendingImport(include) {
   if (!pendingProposal) throw new AutomationRequestError("no-pending-proposal", "No import proposal is pending");
-  const merged = mergeWorkspace(pendingProposal.baseWorkspace, pendingProposal.proposedWorkspace, pendingProposal.schema, include);
+  const allWorkspaceParts = include.configuration && include.layout && include.pins;
+  const merged = pendingProposal.mode === "schema"
+    ? pendingProposal.baseWorkspace
+    : pendingProposal.hasWorkspace && allWorkspaceParts
+      ? normalizeWorkspace(pendingProposal.proposedWorkspace, pendingProposal.fingerprint, pendingProposal.schema)
+      : mergeWorkspace(pendingProposal.baseWorkspace, pendingProposal.proposedWorkspace, pendingProposal.schema, include);
   merged.schemaFingerprint = pendingProposal.fingerprint;
-  loadAppliedProject(pendingProposal.schema, pendingProposal.fingerprint, merged);
+  const startRunning = pendingProposal.mode === "schema" ? running : true;
+  loadAppliedProject(pendingProposal.schema, pendingProposal.fingerprint, merged, { startRunning });
   pendingProposal = null;
   setRootState();
   if (importDialog.open) importDialog.close();
@@ -725,6 +757,9 @@ function applyAutomationImport(selection) {
   const normalized = normalizeImportSelection(selection);
   if (normalized.expectedFingerprint !== pendingProposal.fingerprint) {
     throw new AutomationRequestError("stale-proposal", "expectedFingerprint does not match the pending import proposal");
+  }
+  if (pendingProposal.mode === "schema" && (normalized.configuration || normalized.layout || normalized.pins)) {
+    throw new AutomationRequestError("invalid-selection", "Schema updates require configuration, layout, and pins to be false");
   }
   const include = { configuration: normalized.configuration, layout: normalized.layout, pins: normalized.pins };
   return applyPendingImport(include);
@@ -767,6 +802,37 @@ function applyConfiguration() {
   }
 }
 
+function setPanelOpen(open) {
+  app.dataset.panelOpen = String(open);
+  controlsPanel.inert = !open;
+  controlsPanel.setAttribute("aria-hidden", String(!open));
+  panelToggle.setAttribute("aria-expanded", String(open));
+  panelToggle.setAttribute("aria-label", open ? "Hide controls" : "Show controls");
+  panelToggle.querySelector("span").textContent = open ? "×" : "☰";
+  setTimeout(() => {
+    cy?.resize();
+    scheduleNodeLabelRender();
+  }, 190);
+}
+
+function requestWorkspaceLoad() {
+  if (!schema) {
+    document.getElementById("project-files").click();
+    return;
+  }
+  workspaceWarningDialog.returnValue = "";
+  workspaceWarningDialog.showModal();
+}
+
+function releaseAllPins() {
+  cancelSimulation();
+  cy.nodes().removeClass("pinned");
+  syncSnapshotFromGraph();
+  renderControls();
+  markDirty({ immediate: true });
+  if (running) startSimulation();
+}
+
 function finishRightPan(event) {
   if (!rightPan) return;
   rightPan = null;
@@ -791,6 +857,10 @@ window.addEventListener("mousemove", (event) => {
 }, { capture: true });
 window.addEventListener("mouseup", finishRightPan, { capture: true });
 window.addEventListener("blur", () => { rightPan = null; graphElement.classList.remove("right-panning"); });
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !document.querySelector("dialog[open]") && app.dataset.panelOpen === "true") setPanelOpen(false);
+});
+panelToggle.addEventListener("click", () => setPanelOpen(app.dataset.panelOpen !== "true"));
 
 runToggle.addEventListener("click", () => {
   if (running) {
@@ -798,7 +868,6 @@ runToggle.addEventListener("click", () => {
     currentSnapshot().needsBootstrap = false;
     cancelSimulation();
     syncSnapshotFromGraph();
-    renderMetrics();
     markDirty({ immediate: true });
   } else {
     running = true;
@@ -816,12 +885,13 @@ document.getElementById("new-seed").addEventListener("click", () => {
 });
 seedInput.addEventListener("change", () => resetCurrent(Math.max(1, Number(seedInput.value) >>> 0)));
 document.getElementById("unlock").addEventListener("click", () => {
-  cancelSimulation();
-  cy.nodes().removeClass("pinned");
-  syncSnapshotFromGraph();
-  markDirty({ immediate: true });
-  if (running) startSimulation();
+  const count = currentSnapshot()?.pinned.length ?? 0;
+  if (!count) return;
+  document.getElementById("unlock-warning").textContent = `${count} pinned ${count === 1 ? "table" : "tables"} will be released and may move immediately.`;
+  unlockDialog.returnValue = "";
+  unlockDialog.showModal();
 });
+unlockDialog.addEventListener("close", () => { if (unlockDialog.returnValue === "unlock") releaseAllPins(); });
 for (const input of settingInputs) {
   input.addEventListener("input", () => {
     const snapshot = currentSnapshot();
@@ -830,18 +900,28 @@ for (const input of settingInputs) {
     if (output) output.value = input.value;
     markDirty();
   });
-  input.addEventListener("change", () => { if (!running) renderMetrics(); markDirty({ immediate: true }); });
+  input.addEventListener("change", () => markDirty({ immediate: true }));
 }
 
+document.getElementById("open-workspace").addEventListener("click", requestWorkspaceLoad);
+document.getElementById("empty-open-workspace").addEventListener("click", requestWorkspaceLoad);
+workspaceWarningDialog.addEventListener("close", () => {
+  if (workspaceWarningDialog.returnValue === "continue") document.getElementById("project-files").click();
+});
 document.getElementById("project-files").addEventListener("change", async (event) => {
-  try { await importFiles([...event.target.files]); } catch (error) { message.textContent = `Import failed: ${error.message}`; }
+  try { await importFiles([...event.target.files], { mode: "workspace" }); } catch (error) { message.textContent = `Workspace load failed: ${error.message}`; }
+  finally { event.target.value = ""; }
+});
+document.getElementById("update-schema").addEventListener("click", () => document.getElementById("schema-file").click());
+document.getElementById("schema-file").addEventListener("change", async (event) => {
+  try { await importFiles([...event.target.files], { mode: "schema" }); } catch (error) { message.textContent = `Schema update failed: ${error.message}`; }
   finally { event.target.value = ""; }
 });
 document.getElementById("load-example").addEventListener("click", async () => {
   try {
     const response = await fetch("./examples/helpdesk.project.gravityerd.json", { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    await prepareImport([await response.json()]);
+    await prepareImport([await response.json()], { mode: "workspace" });
   } catch (error) { message.textContent = `Example failed: ${error.message}`; }
 });
 document.getElementById("apply-import").addEventListener("click", () => {
@@ -864,11 +944,11 @@ document.getElementById("copy-workspace").addEventListener("click", async () => 
   catch (error) { message.textContent = `Copy failed: ${error.message}`; }
 });
 document.getElementById("copy-project").addEventListener("click", async () => {
-  try { await copyText(serializeProject(schema, ensureWorkerStoppedForExport())); message.textContent = "Project JSON copied."; }
+  try { await copyText(serializeProject(schema, ensureWorkerStoppedForExport())); message.textContent = "Workspace with schema JSON copied."; }
   catch (error) { message.textContent = `Copy failed: ${error.message}`; }
 });
 document.getElementById("download-workspace").addEventListener("click", () => download("workspace.gravityerd.json", serializeWorkspace(ensureWorkerStoppedForExport()), "application/json"));
-document.getElementById("download-project").addEventListener("click", () => download("project.gravityerd.json", serializeProject(schema, ensureWorkerStoppedForExport()), "application/json"));
+document.getElementById("download-project").addEventListener("click", () => download("workspace-with-schema.gravityerd.json", serializeProject(schema, ensureWorkerStoppedForExport()), "application/json"));
 document.getElementById("export-drawio").addEventListener("click", () => download("gravityerd.drawio", createDrawioExport(data, exportSnapshots()), "application/xml"));
 
 function automationStatus() {
@@ -886,7 +966,7 @@ function automationStatus() {
 }
 
 const automation = Object.freeze({
-  version: "1.1.0",
+  version: "1.2.0",
   getStatus: () => structuredClone(automationStatus()),
   getImportProposal: () => structuredClone(importProposalStatus()),
   getWorkspaceJson: () => workspace ? serializeWorkspace(currentWorkspacePayload({ sync: false })) : null,
@@ -898,11 +978,13 @@ const automation = Object.freeze({
     return structuredClone({ id, position: currentSnapshot().positions[id], pinned: currentSnapshot().pinned.includes(id), domain: node.data("domain"), renderedPosition: node.renderedPosition() });
   },
   proposeImport: (documents) => automationResponse(() => proposeAutomationImport(documents), "import-rejected"),
+  proposeSchemaUpdate: (documentText) => automationResponse(() => proposeAutomationSchemaUpdate(documentText), "schema-update-rejected"),
   applyImportProposal: (selection) => automationResponse(() => applyAutomationImport(selection), "apply-rejected"),
   discardImportProposal: () => automationResponse(discardAutomationImport, "discard-rejected")
 });
 Object.defineProperty(globalThis, "gravityErdAutomation", { value: automation, writable: false, configurable: false });
 
+setPanelOpen(!matchMedia("(max-width: 800px)").matches);
 setRootState();
 const example = new URL(location.href).searchParams.get("example");
 if (example) {

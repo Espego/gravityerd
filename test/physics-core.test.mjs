@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DEFAULT_PHYSICS_SETTINGS,
+  PHYSICS_SETTING_LIMITS,
   activePhysicsEdges,
   angularGapError,
   angularNeighborMap,
@@ -37,6 +38,51 @@ const fanOnly = {
   fanTension: 1,
   speed: 1
 };
+
+test("realtime defaults and experimental upper bounds match the public controls", () => {
+  assert.deepEqual({
+    edgeContraction: DEFAULT_PHYSICS_SETTINGS.edgeContraction,
+    edgeContractionExponent: DEFAULT_PHYSICS_SETTINGS.edgeContractionExponent,
+    repulsionRange: DEFAULT_PHYSICS_SETTINGS.repulsionRange,
+    repulsion: DEFAULT_PHYSICS_SETTINGS.repulsion,
+    gravity: DEFAULT_PHYSICS_SETTINGS.gravity,
+    collisionPadding: DEFAULT_PHYSICS_SETTINGS.collisionPadding,
+    domainAttraction: DEFAULT_PHYSICS_SETTINGS.domainAttraction,
+    fanTension: DEFAULT_PHYSICS_SETTINGS.fanTension,
+    speed: DEFAULT_PHYSICS_SETTINGS.speed
+  }, {
+    edgeContraction: 1.5,
+    edgeContractionExponent: 1.65,
+    repulsionRange: 220,
+    repulsion: 1,
+    gravity: 1,
+    collisionPadding: 24,
+    domainAttraction: 1.25,
+    fanTension: 0.1,
+    speed: 1
+  });
+  assert.deepEqual(Object.fromEntries([
+    "edgeContraction",
+    "edgeContractionExponent",
+    "repulsionRange",
+    "repulsion",
+    "gravity",
+    "collisionPadding",
+    "domainAttraction",
+    "fanTension",
+    "speed"
+  ].map((name) => [name, PHYSICS_SETTING_LIMITS[name][1]])), {
+    edgeContraction: 6,
+    edgeContractionExponent: 5,
+    repulsionRange: 1000,
+    repulsion: 8,
+    gravity: 8,
+    collisionPadding: 200,
+    domainAttraction: 4,
+    fanTension: 4,
+    speed: 6
+  });
+});
 
 test("seeded positions are deterministic and a different seed changes them", () => {
   assert.deepEqual(initialPositions(view, 42), initialPositions(view, 42));

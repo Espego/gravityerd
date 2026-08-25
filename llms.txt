@@ -2,10 +2,19 @@
 
 GravityERD is a fully client-side database schema layout tool. Imported files never leave the browser.
 
+Vocabulary:
+- Schema is refreshable table/relationship metadata.
+- Workspace is views, domains, relationship groups, gravity settings, positions, and pins.
+- gravityerd-project v1 is a workspace with schema; gravityerd-workspace v1 is a workspace without schema.
+
 Agent entry points:
 - automation-contract.json — stable test IDs, root state attributes, and the versioned browser automation API
 - docs/playwright-mcp.md — supported Playwright MCP and human-in-the-loop workflow
 - docs/formats.md — public project/workspace JSON formats and merge behavior
 - examples/helpdesk.project.gravityerd.json — combined public example
 
-Agents without file chooser or clipboard access may pass one or two JSON strings to globalThis.gravityErdAutomation.proposeImport(), inspect the visible proposal, and apply it only with applyImportProposal() using the exact returned fingerprint and explicit configuration/layout/pins choices. These methods use the same validation and merge path as the UI. Export with getProjectJson() or getWorkspaceJson() and write the returned string with a terminal filesystem tool.
+Agents without file chooser or clipboard access may pass one or two JSON strings to globalThis.gravityErdAutomation.proposeImport(), inspect the visible proposal, and apply it only with applyImportProposal() using the exact returned fingerprint and explicit configuration/layout/pins choices. Use proposeSchemaUpdate() plus all-false merge choices to refresh schema while preserving matching workspace state.
+
+To create a view, read stable IDs from getProjectJson().schema.tables, edit getWorkspaceJson().views, propose the workspace-only JSON, and apply configuration=true/layout=false/pins=false. Then select the view through the real control and use real drag/double-click interactions for positions and pins.
+
+Export with getProjectJson() or getWorkspaceJson() and write the returned string with a terminal filesystem tool using private permissions.

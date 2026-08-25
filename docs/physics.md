@@ -13,6 +13,6 @@ Secondary relationships are excluded from angular fan forces. This is useful for
 
 Relationship lines are intentionally unlabeled. The arrow points from the table containing the foreign key to the referenced table. A hollow circle at the source marks a nullable foreign key. Draw.io exports connect relationships to whole table nodes, without fixed ports or waypoints, so diagrams.net can recalculate the perimeter attachment whenever a table is moved.
 
-No final optimizer replaces the visible result. Changing a realtime parameter reheats the current layout without resetting positions or pins. Edge crossings, node hits, and line overlap are diagnostics only; nodes themselves remain collision constrained unless two pinned nodes were deliberately overlapped.
+No final optimizer replaces the visible result. Changing a realtime parameter reheats the current layout without resetting positions or pins. The realtime controls intentionally allow broad experimental ranges, while the force step remains bounded. Continuous crossing/overlap diagnostics are not computed during normal use.
 
-Imported numeric settings are normalized to the same finite ranges exposed by the controls. In particular, an imported fCoSE iteration count cannot exceed 600.
+Imported numeric settings are normalized to the same finite ranges exposed by the controls. Realtime upper bounds are relationship contraction 6, contraction exponent 5, repulsion range 1000, node repulsion 8, gravity 8, node gap 200, domain attraction 4, angular fans 4, and speed 6. The advanced fCoSE bootstrap remains bounded independently; its iteration count cannot exceed 600.

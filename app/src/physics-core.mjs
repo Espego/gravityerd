@@ -7,14 +7,14 @@ export const DEFAULT_PHYSICS_SETTINGS = Object.freeze({
   fcoseRepulsion: 1,
   fcoseGravity: 1,
   fcoseIterations: 240,
-  edgeContraction: 1,
+  edgeContraction: 1.5,
   edgeContractionExponent: 1.65,
   repulsionRange: 220,
   repulsion: 1,
   gravity: 1,
   collisionPadding: 24,
   domainAttraction: 1.25,
-  fanTension: 0.45,
+  fanTension: 0.1,
   auditWeight: 0.15,
   showAuditEdges: false,
   speed: 1
@@ -26,16 +26,16 @@ export const PHYSICS_SETTING_LIMITS = Object.freeze({
   fcoseRepulsion: Object.freeze([0.1, 4]),
   fcoseGravity: Object.freeze([0, 4]),
   fcoseIterations: Object.freeze([50, 600]),
-  edgeContraction: Object.freeze([0, 3]),
-  edgeContractionExponent: Object.freeze([1, 2.5]),
-  repulsionRange: Object.freeze([40, 500]),
-  repulsion: Object.freeze([0, 4]),
-  gravity: Object.freeze([0, 4]),
-  collisionPadding: Object.freeze([0, 100]),
-  domainAttraction: Object.freeze([0, 2]),
-  fanTension: Object.freeze([0, 2]),
+  edgeContraction: Object.freeze([0, 6]),
+  edgeContractionExponent: Object.freeze([1, 5]),
+  repulsionRange: Object.freeze([40, 1000]),
+  repulsion: Object.freeze([0, 8]),
+  gravity: Object.freeze([0, 8]),
+  collisionPadding: Object.freeze([0, 200]),
+  domainAttraction: Object.freeze([0, 4]),
+  fanTension: Object.freeze([0, 4]),
   auditWeight: Object.freeze([0, 4]),
-  speed: Object.freeze([0.2, 3])
+  speed: Object.freeze([0.2, 6])
 });
 
 function finite(value, fallback = 0) {

@@ -6,6 +6,8 @@ No backend, CDN, telemetry, database rows, or imported schema metadata leave the
 
 Hosted application: `https://espego.github.io/gravityerd/`
 
+In the UI, **schema** means refreshable database structure and **workspace** means views, gravity settings, positions, and pins. A workspace can be exported with its schema for a self-contained file, or without it when the schema is managed separately. The version 1 JSON kind names remain compatible.
+
 ## Project status
 
 GravityERD is developed primarily for the author's own use and is published as-is. There is no commitment to ongoing maintenance, support, a public roadmap, compatibility fixes, or response times. Issues and contributions may be considered when time and interest permit, but users should be prepared to maintain their own fork.
@@ -55,6 +57,6 @@ For a non-local database, configure certificate-verified TLS in `DATABASE_URL`; 
 - `automation-contract.json` is the machine-readable stable UI contract.
 - `?example=helpdesk` opens the public synthetic example.
 
-Agents without file chooser or clipboard access can use the versioned `globalThis.gravityErdAutomation` API from Playwright evaluation. `proposeImport()` accepts serialized project/workspace JSON and opens the normal visible proposal; `applyImportProposal()` requires its exact fingerprint and explicit configuration, layout, and pin choices. `getProjectJson()` and `getWorkspaceJson()` return exports directly for terminal-side file writing. See `llms.txt`, `automation-contract.json`, and `docs/playwright-mcp.md` for the complete contract.
+Agents without file chooser or clipboard access can use the versioned `globalThis.gravityErdAutomation` API from Playwright evaluation. `proposeImport()` accepts serialized workspace JSON and opens the normal visible proposal; `proposeSchemaUpdate()` refreshes only schema metadata. `applyImportProposal()` requires the exact proposal fingerprint and explicit configuration, layout, and pin choices. `getProjectJson()` and `getWorkspaceJson()` return exports directly for terminal-side file writing. The documented view-slice workflow lets agents edit `workspace.views` with stable schema table IDs while preserving layout and pins. See `llms.txt`, `automation-contract.json`, and `docs/playwright-mcp.md` for the complete contract.
 
 The repository is MIT licensed. Report vulnerabilities through the private process in `SECURITY.md`.

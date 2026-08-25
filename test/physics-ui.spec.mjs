@@ -1,5 +1,22 @@
 import { readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { expect, test } from "@playwright/test";
+
+const workspaceRoot = process.env.WORKSPACE_ROOT || process.cwd();
+const workspaceFile = (...parts) => path.join(workspaceRoot, ...parts);
+
+async function ensurePanelOpen(page) {
+  if (await page.getByTestId("panel-toggle").getAttribute("aria-expanded") === "false") {
+    await page.getByTestId("panel-toggle").click();
+  }
+  await expect(page.getByTestId("app-root")).toHaveAttribute("data-panel-open", "true");
+}
+
+async function openClipboardExports(page) {
+  await ensurePanelOpen(page);
+  const details = page.locator(".compact-details");
+  if (!await details.evaluate((element) => element.open)) await details.locator("summary").click();
+}
 
 async function loadExample(page) {
   await page.goto("/?example=helpdesk");
@@ -7,6 +24,7 @@ async function loadExample(page) {
   await expect(page.getByTestId("import-proposal-dialog")).toBeVisible();
   await page.getByTestId("apply-import").click();
   await expect(page.getByTestId("app-root")).toHaveAttribute("data-project-loaded", "true");
+  await ensurePanelOpen(page);
 }
 
 test("example supports realtime work, right-drag pan, pins, hover and clipboard round trip", async ({ context, page }, testInfo) => {
@@ -29,8 +47,21 @@ test("example supports realtime work, right-drag pan, pins, hover and clipboard 
   expect(rootResponse.headers()["x-content-type-options"]).toBe("nosniff");
   await expect(page.getByRole("heading", { name: "GravityERD" })).toBeVisible();
   await expect(page.getByTestId("schema-status")).toContainText("7 tables · 8 relationships");
+  await expect(page.locator('[data-for="edgeContraction"]')).toHaveText("1.5");
   await expect(page.locator('[data-for="domainAttraction"]')).toHaveText("1.25");
+  await expect(page.locator('[data-for="fanTension"]')).toHaveText("0.1");
+  await expect(page.locator('[data-setting="edgeContraction"]')).toHaveAttribute("max", "6");
+  await expect(page.locator('[data-setting="repulsionRange"]')).toHaveAttribute("max", "1000");
+  await expect(page.getByTestId("advanced-layout-settings")).not.toHaveAttribute("open", "");
+  await expect(page.getByTestId("seed-input")).toBeHidden();
+  await expect(page.locator("#workspace-bar")).toHaveCount(0);
+  await expect(page.getByTestId("simulation-toggle")).toHaveText("Pause");
   await expect.poll(() => page.evaluate(() => globalThis.gravityErdAutomation.getStatus().simulationPhase), { timeout: 45_000 }).toBe("realtime");
+
+  await page.getByTestId("unlock-all").click();
+  await expect(page.getByTestId("unlock-confirmation-dialog")).toBeVisible();
+  await page.getByTestId("unlock-confirmation-dialog").getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByTestId("unlock-confirmation-dialog")).toBeHidden();
 
   if (testInfo.project.name === "desktop-chromium") {
     await page.getByTestId("fit-view").click();
@@ -55,7 +86,12 @@ test("example supports realtime work, right-drag pan, pins, hover and clipboard 
 
   await page.getByTestId("simulation-toggle").click();
   await expect(page.getByTestId("app-root")).toHaveAttribute("data-simulation-phase", "stopped");
+  await expect(page.getByTestId("simulation-toggle")).toHaveText("Play");
   await page.getByTestId("fit-view").click();
+  if (testInfo.project.name === "mobile-chromium") {
+    await page.getByTestId("panel-toggle").click();
+    await expect(page.getByTestId("app-root")).toHaveAttribute("data-panel-open", "false");
+  }
   const graphElement = page.locator("#graph");
   await expect(graphElement).toBeVisible();
   const graph = await graphElement.boundingBox();
@@ -111,6 +147,7 @@ test("example supports realtime work, right-drag pan, pins, hover and clipboard 
     await expect(page.locator('.node-card-label.dimmed')).not.toHaveCount(0);
   }
 
+  await openClipboardExports(page);
   await page.getByTestId("copy-project-json").click();
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   const parsed = JSON.parse(copied);
@@ -141,8 +178,8 @@ test("example supports realtime work, right-drag pan, pins, hover and clipboard 
 test("file chooser preview supports schema plus separate workspace in either order", async ({ page }) => {
   await page.goto("/");
   await page.getByTestId("project-files-input").setInputFiles([
-    "/workspace/examples/helpdesk.workspace.gravityerd.json",
-    "/workspace/examples/helpdesk.schema.gravityerd.json"
+    workspaceFile("examples", "helpdesk.workspace.gravityerd.json"),
+    workspaceFile("examples", "helpdesk.schema.gravityerd.json")
   ]);
   await expect(page.getByTestId("import-proposal-dialog")).toBeVisible();
   await expect(page.locator("#import-summary")).toContainText("Matching tables");
@@ -153,10 +190,16 @@ test("file chooser preview supports schema plus separate workspace in either ord
 });
 
 test("automation API imports and exports without file or clipboard access", async ({ page }) => {
-  const projectJson = await readFile("/workspace/examples/helpdesk.project.gravityerd.json", "utf8");
+  const project = JSON.parse(await readFile(workspaceFile("examples", "helpdesk.project.gravityerd.json"), "utf8"));
+  project.workspace.snapshots.push({
+    ...structuredClone(project.workspace.snapshots[0]),
+    view: "support-flow",
+    pinned: []
+  });
+  const projectJson = JSON.stringify(project);
   await page.goto("/");
   await expect(page.getByTestId("app-root")).toHaveAttribute("data-ready", "true");
-  expect(await page.evaluate(() => globalThis.gravityErdAutomation.version)).toBe("1.1.0");
+  expect(await page.evaluate(() => globalThis.gravityErdAutomation.version)).toBe("1.2.0");
   expect(await page.evaluate(() => {
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, "gravityErdAutomation");
     return { frozen: Object.isFrozen(globalThis.gravityErdAutomation), writable: descriptor.writable, configurable: descriptor.configurable };
@@ -194,6 +237,19 @@ test("automation API imports and exports without file or clipboard access", asyn
   expect(exported.kind).toBe("gravityerd-project");
   expect(exported.schema.tables).toHaveLength(7);
   expect(exported.workspace.snapshots[0].pinned).toContain("users");
+  expect(exported.workspace.snapshots.map((snapshot) => snapshot.view).sort()).toEqual(["all", "support-flow"]);
+
+  const schemaProposal = await page.evaluate((contents) => globalThis.gravityErdAutomation.proposeSchemaUpdate(contents), projectJson);
+  expect(schemaProposal.ok).toBe(true);
+  expect(schemaProposal.value.mode).toBe("schema");
+  const rejectedSelection = await page.evaluate((expectedFingerprint) => globalThis.gravityErdAutomation.applyImportProposal({
+    expectedFingerprint, configuration: true, layout: false, pins: false
+  }), schemaProposal.value.fingerprint);
+  expect(rejectedSelection.error.code).toBe("invalid-selection");
+  const schemaApplied = await page.evaluate((expectedFingerprint) => globalThis.gravityErdAutomation.applyImportProposal({
+    expectedFingerprint, configuration: false, layout: false, pins: false
+  }), schemaProposal.value.fingerprint);
+  expect(schemaApplied.ok).toBe(true);
 });
 
 test("workspace configuration is editable through stable controls", async ({ page }) => {
@@ -210,4 +266,47 @@ test("workspace configuration is editable through stable controls", async ({ pag
   await page.getByTestId("apply-config").click();
   const project = JSON.parse(await page.evaluate(() => globalThis.gravityErdAutomation.getProjectJson()));
   expect(project.workspace.domains.find((domain) => domain.id === "support").name).toBe("Support workflow");
+});
+
+test("off-canvas controls, replacement warning, and schema-only update preserve workspace state", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await expect(page.getByTestId("app-root")).toHaveAttribute("data-panel-open", testInfo.project.name === "mobile-chromium" ? "false" : "true");
+  await page.getByTestId("panel-toggle").click();
+  await expect(page.getByTestId("app-root")).toHaveAttribute("data-panel-open", testInfo.project.name === "mobile-chromium" ? "true" : "false");
+  await page.getByTestId("panel-toggle").click();
+  await expect(page.getByTestId("app-root")).toHaveAttribute("data-panel-open", testInfo.project.name === "mobile-chromium" ? "false" : "true");
+  await expect(page.getByTestId("load-example")).toBeVisible();
+
+  await loadExample(page);
+  const workspaceChooserPromise = page.waitForEvent("filechooser");
+  await page.getByTestId("open-project-files").click();
+  await expect(page.getByTestId("workspace-warning-dialog")).toBeVisible();
+  await expect(page.getByTestId("workspace-warning-dialog")).toContainText("Export this workspace first");
+  await page.getByTestId("continue-workspace-load").click();
+  const workspaceChooser = await workspaceChooserPromise;
+  await workspaceChooser.setFiles(workspaceFile("examples", "helpdesk.project.gravityerd.json"));
+  await expect(page.getByTestId("import-proposal-dialog")).toBeVisible();
+  await page.getByTestId("cancel-import").click();
+
+  await page.getByTestId("simulation-toggle").click();
+  await page.getByTestId("configure-workspace").click();
+  const domains = JSON.parse(await page.getByTestId("config-json").inputValue());
+  domains.find((domain) => domain.id === "support").name = "Preserved support";
+  await page.getByTestId("config-json").fill(JSON.stringify(domains));
+  await page.getByTestId("apply-config").click();
+  const pinnedBefore = await page.evaluate(() => globalThis.gravityErdAutomation.getNode("tickets"));
+
+  await page.getByTestId("schema-file-input").setInputFiles(workspaceFile("examples", "helpdesk.project.gravityerd.json"));
+  await expect(page.getByTestId("import-proposal-dialog")).toBeVisible();
+  expect((await page.evaluate(() => globalThis.gravityErdAutomation.getImportProposal())).mode).toBe("schema");
+  await expect(page.locator("#workspace-merge-options")).toBeHidden();
+  await expect(page.getByTestId("import-proposal-dialog")).toContainText("Embedded workspace values");
+  await page.getByTestId("apply-import").click();
+  await expect(page.getByTestId("simulation-toggle")).toHaveText("Play");
+
+  const after = JSON.parse(await page.evaluate(() => globalThis.gravityErdAutomation.getProjectJson()));
+  expect(after.workspace.domains.find((domain) => domain.id === "support").name).toBe("Preserved support");
+  expect(after.workspace.snapshots.find((snapshot) => snapshot.view === "all").pinned).toEqual(["tickets", "users"]);
+  const pinnedAfter = await page.evaluate(() => globalThis.gravityErdAutomation.getNode("tickets"));
+  expect(pinnedAfter.position).toEqual(pinnedBefore.position);
 });

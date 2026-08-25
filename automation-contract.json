@@ -1,18 +1,135 @@
 {
-  "name":"GravityERD browser automation contract",
-  "version":"1.1.0",
-  "jsonFormatVersion":1,
-  "root":{"testId":"app-root","stateAttributes":["data-ready","data-project-loaded","data-simulation-phase","data-dirty","data-import-proposal"]},
-  "testIds":{
-    "fileInput":"project-files-input","openFiles":"open-project-files","loadExample":"load-example","proposalDialog":"import-proposal-dialog","applyProposal":"apply-import","cancelProposal":"cancel-import","applyConfiguration":"apply-configuration","applyLayout":"apply-layout","applyPins":"apply-pins","simulationToggle":"simulation-toggle","viewSelect":"view-select","configure":"configure-workspace","configJson":"config-json","applyConfig":"apply-config","copyWorkspace":"copy-workspace-json","copyProject":"copy-project-json"
+  "name": "GravityERD browser automation contract",
+  "version": "1.2.0",
+  "jsonFormatVersion": 1,
+  "root": {
+    "testId": "app-root",
+    "stateAttributes": [
+      "data-ready",
+      "data-project-loaded",
+      "data-simulation-phase",
+      "data-dirty",
+      "data-import-proposal",
+      "data-panel-open"
+    ]
   },
-  "readOnlyApi":{"global":"gravityErdAutomation","version":"1.1.0","methods":{"getStatus":{"returns":"AutomationStatus"},"getImportProposal":{"returns":"ImportProposalStatus|null"},"getWorkspaceJson":{"returns":"string|null"},"getProjectJson":{"returns":"string|null"},"getNode":{"arguments":["stableTableId"],"returns":"NodeStatus|null"}}},
-  "mutationApi":{"global":"gravityErdAutomation","version":"1.1.0","maxDocumentBytes":16777216,"methods":{"proposeImport":{"arguments":["jsonDocuments: string[1..2]"],"returns":"Promise<AutomationResult<ImportProposalStatus>>","effect":"Validates through the normal import path and opens the visible proposal without changing the project."},"applyImportProposal":{"arguments":["{expectedFingerprint, configuration, layout, pins}"],"returns":"Promise<AutomationResult<AutomationStatus>>","effect":"Applies only the current fingerprint-matched proposal through the normal merge path."},"discardImportProposal":{"arguments":[],"returns":"Promise<AutomationResult<AutomationStatus>>","effect":"Closes and discards the current proposal without changing the project."}}},
-  "sequences":{
-    "import":["Wait for the filechooser before activating the real file input.","Set one project, one workspace, or both absolute paths in any order.","Wait for data-import-proposal=pending.","Inspect the proposal dialog and choose configuration/layout/pins.","Click Apply proposal or leave the proposal open for human review."],
-    "agentImport":["Read one project JSON string and optionally one workspace JSON string with a terminal/filesystem tool.","Call proposeImport(documents) and require ok=true.","Inspect the returned summary and the visible proposal.","When authorized, call applyImportProposal with the exact returned fingerprint and three explicit boolean choices; otherwise leave it open or discard it."],
-    "export":["Stop the simulation using the real button when exact current positions are required.","Call getWorkspaceJson() or getProjectJson().","Write the returned string with a filesystem tool using private permissions; clipboard and browser downloads are not required."],
-    "humanLoop":["Leave the graph open for manual placement and pins.","After the user says they are done, re-read status, fingerprint, revision, and dirty state.","Stop the simulation, read getWorkspaceJson(), store it, then propose and apply it again to verify an exact round trip."]
+  "testIds": {
+    "panelToggle": "panel-toggle",
+    "fileInput": "project-files-input",
+    "openFiles": "open-project-files",
+    "workspaceWarning": "workspace-warning-dialog",
+    "continueWorkspaceLoad": "continue-workspace-load",
+    "schemaInput": "schema-file-input",
+    "updateSchema": "update-schema",
+    "loadExample": "load-example",
+    "proposalDialog": "import-proposal-dialog",
+    "applyProposal": "apply-import",
+    "cancelProposal": "cancel-import",
+    "applyConfiguration": "apply-configuration",
+    "applyLayout": "apply-layout",
+    "applyPins": "apply-pins",
+    "simulationToggle": "simulation-toggle",
+    "viewSelect": "view-select",
+    "configure": "configure-workspace",
+    "configJson": "config-json",
+    "applyConfig": "apply-config",
+    "unlockAll": "unlock-all",
+    "unlockConfirmation": "unlock-confirmation-dialog",
+    "confirmUnlock": "confirm-unlock",
+    "advancedLayout": "advanced-layout-settings",
+    "downloadWorkspace": "download-workspace",
+    "downloadWithSchema": "download-project",
+    "copyWorkspace": "copy-workspace-json",
+    "copyProject": "copy-project-json"
   },
-  "errors":["invalid-request","invalid-json","invalid-document","document-too-large","proposal-pending","dialog-open","import-rejected","no-pending-proposal","stale-proposal","apply-rejected","discard-rejected"]
+  "readOnlyApi": {
+    "global": "gravityErdAutomation",
+    "version": "1.2.0",
+    "methods": {
+      "getStatus": { "returns": "AutomationStatus" },
+      "getImportProposal": { "returns": "ImportProposalStatus|null" },
+      "getWorkspaceJson": { "returns": "string|null" },
+      "getProjectJson": { "returns": "string|null" },
+      "getNode": { "arguments": ["stableTableId"], "returns": "NodeStatus|null" }
+    }
+  },
+  "mutationApi": {
+    "global": "gravityErdAutomation",
+    "version": "1.2.0",
+    "maxDocumentBytes": 16777216,
+    "methods": {
+      "proposeImport": {
+        "arguments": ["jsonDocuments: string[1..2]"],
+        "returns": "Promise<AutomationResult<ImportProposalStatus>>",
+        "effect": "Validates a workspace, optionally with a schema, and opens the visible proposal without changing current state."
+      },
+      "proposeSchemaUpdate": {
+        "arguments": ["jsonDocument: string"],
+        "returns": "Promise<AutomationResult<ImportProposalStatus>>",
+        "effect": "Validates one schema-bearing document and opens a visible schema-only proposal that preserves matching workspace state."
+      },
+      "applyImportProposal": {
+        "arguments": ["{expectedFingerprint, configuration, layout, pins}"],
+        "returns": "Promise<AutomationResult<AutomationStatus>>",
+        "effect": "Applies only the current fingerprint-matched proposal through the normal merge path. A schema-only proposal requires all three booleans to be false."
+      },
+      "discardImportProposal": {
+        "arguments": [],
+        "returns": "Promise<AutomationResult<AutomationStatus>>",
+        "effect": "Closes and discards the current proposal without changing current state."
+      }
+    }
+  },
+  "sequences": {
+    "workspaceImport": [
+      "Wait for the filechooser before activating Load workspace.",
+      "If a workspace is already open, review and continue through the replacement warning.",
+      "Set one combined workspace, one schema plus one workspace, or one workspace-only absolute path.",
+      "Wait for data-import-proposal=pending.",
+      "Inspect the proposal and choose configuration/layout/pins.",
+      "Apply the proposal or leave it open for human review."
+    ],
+    "schemaUpdate": [
+      "Activate Update schema and set one schema-bearing file.",
+      "Confirm that the proposal mode is schema and inspect added, matching, and removed table counts.",
+      "Apply with configuration/layout/pins all false; matching workspace settings, positions, and pins are preserved."
+    ],
+    "agentImport": [
+      "Read one combined workspace JSON string and optionally one workspace-only JSON string with a terminal/filesystem tool.",
+      "Call proposeImport(documents) and require ok=true.",
+      "Inspect the returned summary and the visible proposal.",
+      "When authorized, call applyImportProposal with the exact returned fingerprint and three explicit boolean choices; otherwise leave it open or discard it."
+    ],
+    "createView": [
+      "Read getWorkspaceJson() and getProjectJson().",
+      "Choose table IDs only from the current schema and add a stable custom entry to workspace.views.",
+      "Call proposeImport([updatedWorkspaceJson]) and inspect the visible proposal.",
+      "Apply with configuration=true, layout=false, pins=false so existing physical placement is retained."
+    ],
+    "export": [
+      "Pause the simulation using the real button when exact current positions are required.",
+      "Call getWorkspaceJson() or getProjectJson().",
+      "Write the returned string with a filesystem tool using private permissions; clipboard and browser downloads are not required."
+    ],
+    "humanLoop": [
+      "Leave the graph open for manual placement and pins.",
+      "After the user says they are done, re-read status, fingerprint, revision, and dirty state.",
+      "Pause the simulation, read getWorkspaceJson(), store it, then propose and apply it again to verify an exact round trip."
+    ]
+  },
+  "errors": [
+    "invalid-request",
+    "invalid-json",
+    "invalid-document",
+    "document-too-large",
+    "proposal-pending",
+    "dialog-open",
+    "import-rejected",
+    "schema-update-rejected",
+    "no-pending-proposal",
+    "stale-proposal",
+    "invalid-selection",
+    "apply-rejected",
+    "discard-rejected"
+  ]
 }
