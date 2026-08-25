@@ -1,16 +1,14 @@
-# Playwright MCP workflow
+# Playwright and agent workflow
 
-GravityERD exposes a stable browser automation surface without a mutation API. Agents and people use the same controls, import preview, and confirmation.
+GravityERD exposes a frozen, versioned browser automation surface. Normal browser work uses real controls. Agents that cannot access a file chooser or clipboard may use the narrow two-phase import bridge; it opens the same visible proposal and applies through the same validation and merge functions as a UI import.
 
-## Open and import
+## Open and import through the UI
 
 1. Open the GitHub Pages URL (or local URL) and wait for `[data-testid="app-root"][data-ready="true"]`.
-2. Create the file-chooser wait **before** clicking the real `Open project files` label/input.
+2. Create the file-chooser wait before clicking the real `Open project files` label/input.
 3. Set absolute local paths with `filechooser.setFiles()`. A project and workspace may be selected together in either order.
 4. Wait for `data-import-proposal="pending"` and inspect the proposal dialog.
-5. Select configuration, positions, and pins separately. Click `Apply proposal` only when the user-authorized task includes applying the import. For human review, leave the dialog open.
-
-Conceptual Playwright sequence:
+5. Select configuration, positions, and pins separately. Apply only when the user-authorized task includes applying the import; otherwise leave the proposal open for review.
 
 ```js
 const chooserPromise = tab.playwright.waitForEvent("filechooser");
@@ -20,33 +18,65 @@ await chooser.setFiles([absoluteProjectPath, absoluteWorkspacePath]);
 await tab.getByTestId("import-proposal-dialog").waitFor({ state: "visible" });
 ```
 
-Use supported browser operations and real mouse/keyboard input. Do not invoke DOM events synthetically.
+Use supported browser operations and real mouse/keyboard input. Do not synthesize DOM events.
 
-## Inspect without mutating
+## Import from a terminal without file upload
 
-`globalThis.gravityErdAutomation` is frozen and read-only:
+`globalThis.gravityErdAutomation.proposeImport()` accepts an array containing one project JSON string and optionally one workspace JSON string. Each document must be a JSON object and is limited to 16 MiB. The method validates through the normal import path and opens the normal proposal dialog without changing the current project.
+
+Every mutation returns `{ ok: true, value }` or `{ ok: false, error: { code, message } }`. Applying requires the exact proposal fingerprint and explicit boolean choices; this prevents a stale or replaced proposal from being applied accidentally.
+
+```js
+import { readFile, writeFile } from "node:fs/promises";
+
+const projectText = await readFile(absoluteProjectPath, "utf8");
+const proposed = await page.evaluate(
+  (json) => globalThis.gravityErdAutomation.proposeImport([json]),
+  projectText
+);
+if (!proposed.ok) throw new Error(`${proposed.error.code}: ${proposed.error.message}`);
+
+// Inspect proposed.value.summary and the visible dialog first.
+const applied = await page.evaluate(
+  (fingerprint) => globalThis.gravityErdAutomation.applyImportProposal({
+    expectedFingerprint: fingerprint,
+    configuration: true,
+    layout: true,
+    pins: true
+  }),
+  proposed.value.fingerprint
+);
+if (!applied.ok) throw new Error(`${applied.error.code}: ${applied.error.message}`);
+
+// No clipboard or download path is required for export.
+await page.getByTestId("simulation-toggle").click(); // Stop before capturing exact live positions.
+const exported = await page.evaluate(() => globalThis.gravityErdAutomation.getProjectJson());
+await writeFile(absoluteOutputPath, exported, { mode: 0o600 });
+```
+
+When application is not authorized, leave the proposal visible for human review or call `discardImportProposal()`. Calling `proposeImport()` while another proposal is pending is rejected rather than replacing it.
+
+## Inspect state
+
+The inspection methods do not mutate the project:
 
 ```js
 const status = await tab.playwright.evaluate(() => globalThis.gravityErdAutomation.getStatus());
+const proposal = await tab.playwright.evaluate(() => globalThis.gravityErdAutomation.getImportProposal());
 const node = await tab.playwright.evaluate(() => globalThis.gravityErdAutomation.getNode("tickets"));
 ```
 
-Use `getStatus()` to verify the schema fingerprint, active view, simulation phase, movement, pending proposal, and dirty revision. `getNode(id)` returns stored and rendered positions, pin state, and domain. The API must not be used to mutate a workspace.
+Use `getStatus()` to verify the schema fingerprint, active view, simulation phase, movement, pending proposal, and dirty revision. `getImportProposal()` returns its fingerprint and summary. `getNode(id)` returns stored and rendered positions, pin state, and domain.
 
 ## Human in the loop
 
-After an agent imports and optionally configures domains, views, or relationship groups, it can leave the tab open. The user may stop the simulation, drag and pin tables, tune parameters, and then tell Codex “done.” The agent then:
+After an agent imports and optionally configures domains, views, or relationship groups, it can leave the tab open. The user may stop the simulation, drag and pin tables, tune parameters, and then tell the agent “done.” The agent then:
 
 1. reclaims the same tab;
 2. checks fingerprint, revision, dirty state, and pending proposal;
-3. stops the simulation through the real button if needed;
-4. clicks `Copy workspace JSON`;
-5. reads `tab.clipboard.readText()`;
-6. writes that exact JSON to the user-selected repository with a filesystem tool;
-7. imports the saved file through the file chooser and confirms a fingerprint- and content-exact round trip.
+3. stops the simulation through the real button;
+4. reads `getWorkspaceJson()` or `getProjectJson()`;
+5. writes that exact string with a filesystem tool using private permissions;
+6. proposes the stored JSON again and verifies a fingerprint- and content-exact round trip.
 
-## Export
-
-For repository automation, use `Copy workspace JSON` or `Copy project JSON`, then read the clipboard. Browser download paths are deliberately not part of the contract because Playwright MCP does not guarantee a usable filesystem path. Human users can still use the download buttons.
-
-The complete test IDs, status fields, sequences, and error identifiers are versioned in `automation-contract.json`.
+Browser downloads and clipboard remain available to people, but neither is required by the agent contract. The complete test IDs, status fields, method signatures, sequences, and error identifiers are versioned in `automation-contract.json`.

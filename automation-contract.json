@@ -1,16 +1,18 @@
 {
   "name":"GravityERD browser automation contract",
-  "version":"1.0.0",
+  "version":"1.1.0",
   "jsonFormatVersion":1,
   "root":{"testId":"app-root","stateAttributes":["data-ready","data-project-loaded","data-simulation-phase","data-dirty","data-import-proposal"]},
   "testIds":{
     "fileInput":"project-files-input","openFiles":"open-project-files","loadExample":"load-example","proposalDialog":"import-proposal-dialog","applyProposal":"apply-import","cancelProposal":"cancel-import","applyConfiguration":"apply-configuration","applyLayout":"apply-layout","applyPins":"apply-pins","simulationToggle":"simulation-toggle","viewSelect":"view-select","configure":"configure-workspace","configJson":"config-json","applyConfig":"apply-config","copyWorkspace":"copy-workspace-json","copyProject":"copy-project-json"
   },
-  "readOnlyApi":{"global":"gravityErdAutomation","version":"1.0.0","methods":{"getStatus":{"returns":"AutomationStatus"},"getWorkspaceJson":{"returns":"string|null"},"getProjectJson":{"returns":"string|null"},"getNode":{"arguments":["stableTableId"],"returns":"NodeStatus|null"}}},
+  "readOnlyApi":{"global":"gravityErdAutomation","version":"1.1.0","methods":{"getStatus":{"returns":"AutomationStatus"},"getImportProposal":{"returns":"ImportProposalStatus|null"},"getWorkspaceJson":{"returns":"string|null"},"getProjectJson":{"returns":"string|null"},"getNode":{"arguments":["stableTableId"],"returns":"NodeStatus|null"}}},
+  "mutationApi":{"global":"gravityErdAutomation","version":"1.1.0","maxDocumentBytes":16777216,"methods":{"proposeImport":{"arguments":["jsonDocuments: string[1..2]"],"returns":"Promise<AutomationResult<ImportProposalStatus>>","effect":"Validates through the normal import path and opens the visible proposal without changing the project."},"applyImportProposal":{"arguments":["{expectedFingerprint, configuration, layout, pins}"],"returns":"Promise<AutomationResult<AutomationStatus>>","effect":"Applies only the current fingerprint-matched proposal through the normal merge path."},"discardImportProposal":{"arguments":[],"returns":"Promise<AutomationResult<AutomationStatus>>","effect":"Closes and discards the current proposal without changing the project."}}},
   "sequences":{
     "import":["Wait for the filechooser before activating the real file input.","Set one project, one workspace, or both absolute paths in any order.","Wait for data-import-proposal=pending.","Inspect the proposal dialog and choose configuration/layout/pins.","Click Apply proposal or leave the proposal open for human review."],
-    "export":["Optionally stop the simulation using the real button.","Click Copy workspace JSON or Copy project JSON.","Read tab.clipboard.readText().","Write the returned text with a filesystem tool; do not rely on a browser download path."],
-    "humanLoop":["Leave the graph open for manual placement and pins.","After the user says they are done, re-read status, fingerprint, revision, and dirty state.","Copy workspace JSON, store it, then import it again and verify an exact round trip."]
+    "agentImport":["Read one project JSON string and optionally one workspace JSON string with a terminal/filesystem tool.","Call proposeImport(documents) and require ok=true.","Inspect the returned summary and the visible proposal.","When authorized, call applyImportProposal with the exact returned fingerprint and three explicit boolean choices; otherwise leave it open or discard it."],
+    "export":["Stop the simulation using the real button when exact current positions are required.","Call getWorkspaceJson() or getProjectJson().","Write the returned string with a filesystem tool using private permissions; clipboard and browser downloads are not required."],
+    "humanLoop":["Leave the graph open for manual placement and pins.","After the user says they are done, re-read status, fingerprint, revision, and dirty state.","Stop the simulation, read getWorkspaceJson(), store it, then propose and apply it again to verify an exact round trip."]
   },
-  "errors":["invalid-json","unsupported-format-version","missing-schema","multiple-schemas","schema-fingerprint-mismatch","invalid-stable-id","clipboard-denied"]
+  "errors":["invalid-request","invalid-json","invalid-document","document-too-large","proposal-pending","dialog-open","import-rejected","no-pending-proposal","stale-proposal","apply-rejected","discard-rejected"]
 }

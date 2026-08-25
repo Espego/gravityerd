@@ -22,6 +22,12 @@ import {
   serializeWorkspace
 } from "./project-format.mjs";
 import { buildGraphData } from "./graph-data.mjs";
+import {
+  AutomationRequestError,
+  automationResponse,
+  normalizeImportSelection,
+  parseAutomationDocuments
+} from "./automation-api.mjs";
 import { loadStoredWorkspace as loadWorkspace, saveStoredWorkspace as saveWorkspace } from "./workspace-store.mjs";
 
 cytoscape.use(fcose);
@@ -620,6 +626,16 @@ function proposalPairs(summary) {
   ];
 }
 
+function importProposalStatus() {
+  if (!pendingProposal) return null;
+  return {
+    fingerprint: pendingProposal.fingerprint,
+    fingerprintMismatch: pendingProposal.fingerprintMismatch,
+    hasWorkspace: pendingProposal.hasWorkspace,
+    summary: proposalSummary(pendingProposal.schema, pendingProposal.baseWorkspace, pendingProposal.proposedWorkspace, pendingProposal.previousSchema)
+  };
+}
+
 function showProposal(proposal) {
   pendingProposal = proposal;
   const summary = proposalSummary(proposal.schema, proposal.baseWorkspace, proposal.proposedWorkspace, proposal.previousSchema);
@@ -647,7 +663,10 @@ async function prepareImport(objects) {
   let separateWorkspace = null;
   for (const object of objects) {
     const normalized = normalizeProject(object);
-    if (normalized.type === "workspace") separateWorkspace = normalized.workspace;
+    if (normalized.type === "workspace") {
+      if (separateWorkspace) throw new Error("Only one workspace file can be imported at a time");
+      separateWorkspace = normalized.workspace;
+    }
     else {
       if (project) throw new Error("Only one schema/project file can be imported at a time");
       project = normalized.project;
@@ -679,6 +698,45 @@ async function importFiles(files) {
   const objects = [];
   for (const file of files) objects.push(JSON.parse(await file.text()));
   await prepareImport(objects);
+}
+
+async function proposeAutomationImport(documents) {
+  if (pendingProposal) throw new AutomationRequestError("proposal-pending", "Apply or discard the current import proposal first");
+  if (configDialog.open) throw new AutomationRequestError("dialog-open", "Close the workspace configuration dialog first");
+  await prepareImport(parseAutomationDocuments(documents));
+  message.textContent = "Import proposal created by automation.";
+  return importProposalStatus();
+}
+
+function applyPendingImport(include) {
+  if (!pendingProposal) throw new AutomationRequestError("no-pending-proposal", "No import proposal is pending");
+  const merged = mergeWorkspace(pendingProposal.baseWorkspace, pendingProposal.proposedWorkspace, pendingProposal.schema, include);
+  merged.schemaFingerprint = pendingProposal.fingerprint;
+  loadAppliedProject(pendingProposal.schema, pendingProposal.fingerprint, merged);
+  pendingProposal = null;
+  setRootState();
+  if (importDialog.open) importDialog.close();
+  message.textContent = "Import proposal applied.";
+  return automationStatus();
+}
+
+function applyAutomationImport(selection) {
+  if (!pendingProposal) throw new AutomationRequestError("no-pending-proposal", "No import proposal is pending");
+  const normalized = normalizeImportSelection(selection);
+  if (normalized.expectedFingerprint !== pendingProposal.fingerprint) {
+    throw new AutomationRequestError("stale-proposal", "expectedFingerprint does not match the pending import proposal");
+  }
+  const include = { configuration: normalized.configuration, layout: normalized.layout, pins: normalized.pins };
+  return applyPendingImport(include);
+}
+
+function discardAutomationImport() {
+  if (!pendingProposal) throw new AutomationRequestError("no-pending-proposal", "No import proposal is pending");
+  pendingProposal = null;
+  setRootState();
+  if (importDialog.open) importDialog.close();
+  message.textContent = "Import proposal discarded by automation.";
+  return automationStatus();
 }
 
 function renderConfig(section = configSection) {
@@ -793,13 +851,7 @@ document.getElementById("apply-import").addEventListener("click", () => {
     layout: document.getElementById("apply-layout").checked,
     pins: document.getElementById("apply-pins").checked
   };
-  const merged = mergeWorkspace(pendingProposal.baseWorkspace, pendingProposal.proposedWorkspace, pendingProposal.schema, include);
-  merged.schemaFingerprint = pendingProposal.fingerprint;
-  loadAppliedProject(pendingProposal.schema, pendingProposal.fingerprint, merged);
-  pendingProposal = null;
-  setRootState();
-  importDialog.close();
-  message.textContent = "Import proposal applied.";
+  applyPendingImport(include);
 });
 importDialog.addEventListener("close", () => { if (importDialog.returnValue === "cancel") { pendingProposal = null; setRootState(); } });
 
@@ -834,8 +886,9 @@ function automationStatus() {
 }
 
 const automation = Object.freeze({
-  version: "1.0.0",
+  version: "1.1.0",
   getStatus: () => structuredClone(automationStatus()),
+  getImportProposal: () => structuredClone(importProposalStatus()),
   getWorkspaceJson: () => workspace ? serializeWorkspace(currentWorkspacePayload({ sync: false })) : null,
   getProjectJson: () => schema ? serializeProject(schema, currentWorkspacePayload({ sync: false })) : null,
   getNode: (id) => {
@@ -843,7 +896,10 @@ const automation = Object.freeze({
     const node = cy.getElementById(id).filter("node");
     if (!node.length) return null;
     return structuredClone({ id, position: currentSnapshot().positions[id], pinned: currentSnapshot().pinned.includes(id), domain: node.data("domain"), renderedPosition: node.renderedPosition() });
-  }
+  },
+  proposeImport: (documents) => automationResponse(() => proposeAutomationImport(documents), "import-rejected"),
+  applyImportProposal: (selection) => automationResponse(() => applyAutomationImport(selection), "apply-rejected"),
+  discardImportProposal: () => automationResponse(discardAutomationImport, "discard-rejected")
 });
 Object.defineProperty(globalThis, "gravityErdAutomation", { value: automation, writable: false, configurable: false });
 

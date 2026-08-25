@@ -3,9 +3,9 @@
 GravityERD is a fully client-side database schema layout tool. Imported files never leave the browser.
 
 Agent entry points:
-- automation-contract.json — stable test IDs, root state attributes, and read-only browser API
+- automation-contract.json — stable test IDs, root state attributes, and the versioned browser automation API
 - docs/playwright-mcp.md — supported Playwright MCP and human-in-the-loop workflow
 - docs/formats.md — public project/workspace JSON formats and merge behavior
 - examples/helpdesk.project.gravityerd.json — combined public example
 
-Use the real file input and proposal UI for mutations. Use globalThis.gravityErdAutomation only for read-only inspection. Export to a repository through the Copy JSON controls and clipboard, never through an assumed browser download path.
+Agents without file chooser or clipboard access may pass one or two JSON strings to globalThis.gravityErdAutomation.proposeImport(), inspect the visible proposal, and apply it only with applyImportProposal() using the exact returned fingerprint and explicit configuration/layout/pins choices. These methods use the same validation and merge path as the UI. Export with getProjectJson() or getWorkspaceJson() and write the returned string with a terminal filesystem tool.

@@ -1,6 +1,6 @@
 # GravityERD security review
 
-Review date: 2026-08-24
+Review date: 2026-08-25
 
 ## Scope and trust boundaries
 
@@ -19,6 +19,7 @@ Database credentials and imported schema metadata are trusted only at the CLI pr
 | GERD-05 | Medium | GitHub Actions used movable major tags and checkout credentials remained available to later steps. | Official actions are pinned to verified commit SHAs, checkout credential persistence is disabled, and permissions are assigned per job. |
 | GERD-06 | Low | A malformed encoded URL could terminate the local server request handler. | URL decoding failures return 400; traversal attempts and unsupported methods have explicit responses and tests. |
 | GERD-07 | Low | CLI file output was written directly with group/world-readable default permissions and followed an existing symlink. | Output is written to a private temporary file, synced, and atomically renamed with mode `0600`; stdout behavior is unchanged. |
+| GERD-08 | Low | A direct automation mutation surface could bypass import review or apply a stale proposal. | The API only accepts one or two bounded JSON strings, always opens the visible normal proposal, returns a fingerprint, and requires that exact fingerprint plus three explicit merge choices before applying through the shared UI merge path. |
 
 ## Validation
 
@@ -26,7 +27,8 @@ The release gate runs JavaScript and Go unit tests, PostgreSQL and MySQL integra
 
 ## Accepted Low risks
 
-- A deliberately selected, extremely large JSON file can still consume browser memory before semantic normalization. The file chooser is an explicit local trust decision; hard format-size limits would reject legitimate large schemas.
+- A deliberately selected, extremely large JSON file can still consume browser memory before semantic normalization. The file chooser is an explicit local trust decision; hard format-size limits would reject legitimate large schemas. The terminal automation API has a separate 16 MiB per-document limit.
 - Schema metadata can itself contain sensitive identifiers, comments, defaults, or constraint text. GravityERD never inspects rows or uploads the metadata, but users must treat exported project files as schema-sensitive artifacts.
 - A local Docker daemon or same-user process can inspect environment variables of a running exporter container. Credentials are never serialized, logged by GravityERD, or committed, but the local container runtime remains inside the trust boundary.
 - GitHub Pages cannot set the server-level `frame-ancestors` header. The local server sends it; the hosted client has no authenticated backend or remotely state-changing action.
+- The automation mutation methods are intentionally callable by code already executing in the application origin. CSP, local-only dependencies, context-safe rendering, and the absence of third-party scripts reduce that path; a same-origin script compromise would already control the client and its IndexedDB state. The API adds no backend or network upload capability.

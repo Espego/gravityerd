@@ -55,4 +55,6 @@ For a non-local database, configure certificate-verified TLS in `DATABASE_URL`; 
 - `automation-contract.json` is the machine-readable stable UI contract.
 - `?example=helpdesk` opens the public synthetic example.
 
+Agents without file chooser or clipboard access can use the versioned `globalThis.gravityErdAutomation` API from Playwright evaluation. `proposeImport()` accepts serialized project/workspace JSON and opens the normal visible proposal; `applyImportProposal()` requires its exact fingerprint and explicit configuration, layout, and pin choices. `getProjectJson()` and `getWorkspaceJson()` return exports directly for terminal-side file writing. See `llms.txt`, `automation-contract.json`, and `docs/playwright-mcp.md` for the complete contract.
+
 The repository is MIT licensed. Report vulnerabilities through the private process in `SECURITY.md`.

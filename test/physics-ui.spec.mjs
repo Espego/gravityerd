@@ -152,6 +152,50 @@ test("file chooser preview supports schema plus separate workspace in either ord
   await expect.poll(() => page.evaluate(() => globalThis.gravityErdAutomation.getNode("users").pinned)).toBe(false);
 });
 
+test("automation API imports and exports without file or clipboard access", async ({ page }) => {
+  const projectJson = await readFile("/workspace/examples/helpdesk.project.gravityerd.json", "utf8");
+  await page.goto("/");
+  await expect(page.getByTestId("app-root")).toHaveAttribute("data-ready", "true");
+  expect(await page.evaluate(() => globalThis.gravityErdAutomation.version)).toBe("1.1.0");
+  expect(await page.evaluate(() => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "gravityErdAutomation");
+    return { frozen: Object.isFrozen(globalThis.gravityErdAutomation), writable: descriptor.writable, configurable: descriptor.configurable };
+  })).toEqual({ frozen: true, writable: false, configurable: false });
+
+  const malformed = await page.evaluate(() => globalThis.gravityErdAutomation.proposeImport(["{"]));
+  expect(malformed).toEqual({ ok: false, error: { code: "invalid-json", message: "documents[0] is not valid JSON" } });
+  await expect(page.getByTestId("app-root")).toHaveAttribute("data-import-proposal", "none");
+
+  let proposed = await page.evaluate((contents) => globalThis.gravityErdAutomation.proposeImport([contents]), projectJson);
+  expect(proposed.ok).toBe(true);
+  expect(proposed.value.summary).toMatchObject({ tables: 7, relationships: 8, pins: 2 });
+  expect(await page.evaluate(() => globalThis.gravityErdAutomation.getImportProposal())).toEqual(proposed.value);
+  await expect(page.getByTestId("import-proposal-dialog")).toBeVisible();
+
+  const duplicate = await page.evaluate((contents) => globalThis.gravityErdAutomation.proposeImport([contents]), projectJson);
+  expect(duplicate.error.code).toBe("proposal-pending");
+  expect((await page.evaluate(() => globalThis.gravityErdAutomation.discardImportProposal())).ok).toBe(true);
+  await expect(page.getByTestId("import-proposal-dialog")).toBeHidden();
+  proposed = await page.evaluate((contents) => globalThis.gravityErdAutomation.proposeImport([contents]), projectJson);
+  expect(proposed.ok).toBe(true);
+
+  const stale = await page.evaluate(() => globalThis.gravityErdAutomation.applyImportProposal({
+    expectedFingerprint: "0".repeat(64), configuration: true, layout: true, pins: true
+  }));
+  expect(stale).toEqual({ ok: false, error: { code: "stale-proposal", message: "expectedFingerprint does not match the pending import proposal" } });
+  await expect(page.getByTestId("app-root")).toHaveAttribute("data-project-loaded", "false");
+
+  const applied = await page.evaluate((expectedFingerprint) => globalThis.gravityErdAutomation.applyImportProposal({
+    expectedFingerprint, configuration: true, layout: true, pins: true
+  }), proposed.value.fingerprint);
+  expect(applied.ok).toBe(true);
+  await expect(page.getByTestId("schema-status")).toContainText("7 tables · 8 relationships");
+  const exported = JSON.parse(await page.evaluate(() => globalThis.gravityErdAutomation.getProjectJson()));
+  expect(exported.kind).toBe("gravityerd-project");
+  expect(exported.schema.tables).toHaveLength(7);
+  expect(exported.workspace.snapshots[0].pinned).toContain("users");
+});
+
 test("workspace configuration is editable through stable controls", async ({ page }) => {
   await loadExample(page);
   await page.getByTestId("configure-workspace").click();
