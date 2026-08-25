@@ -1,0 +1,25 @@
+{
+  "name": "gravityerd",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node app/build.mjs",
+    "examples": "node scripts/generate-example.mjs",
+    "dev": "node app/server.mjs --watch",
+    "serve": "node app/server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:e2e": "playwright test --config app/playwright.config.mjs"
+  },
+  "dependencies": {
+    "cytoscape": "3.34.1",
+    "cytoscape-fcose": "2.2.0",
+    "esbuild": "0.28.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://gravityerd.github.io/schemas/gravityerd-project.schema.json",
+  "title":"GravityERD project",
+  "type":"object",
+  "required":["kind","version","schema"],
+  "properties":{
+    "kind":{"const":"gravityerd-project"},
+    "version":{"const":1},
+    "schema":{"$ref":"#/$defs/schema"},
+    "workspace":{"$ref":"gravityerd-workspace.schema.json"}
+  },
+  "additionalProperties":false,
+  "$defs":{
+    "schema":{"type":"object","required":["engine","namespace","tables","foreignKeys"],"properties":{"engine":{"enum":["postgresql","mysql","manual"]},"namespace":{"type":"string","minLength":1},"tables":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/table"}},"foreignKeys":{"type":"array","items":{"$ref":"#/$defs/foreignKey"}}},"additionalProperties":false},
+    "table":{"type":"object","required":["id","name","columns","constraints"],"properties":{"id":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"comment":{"type":"string"},"columns":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/column"}},"constraints":{"type":"array","items":{"$ref":"#/$defs/constraint"}}},"additionalProperties":false},
+    "column":{"type":"object","required":["name","type","nullable","ordinal"],"properties":{"name":{"type":"string","minLength":1},"type":{"type":"string","minLength":1},"nullable":{"type":"boolean"},"default":{"type":"string"},"comment":{"type":"string"},"ordinal":{"type":"integer","minimum":1}},"additionalProperties":false},
+    "constraint":{"type":"object","required":["id","name","type","columns","definition"],"properties":{"id":{"type":"string"},"name":{"type":"string"},"type":{"enum":["primary_key","unique","check"]},"columns":{"type":"array","items":{"type":"string"}},"definition":{"type":"string"}},"additionalProperties":false},
+    "foreignKey":{"type":"object","required":["id","name","sourceTable","sourceColumns","targetTable","targetColumns","onDelete","onUpdate","definition"],"properties":{"id":{"type":"string"},"name":{"type":"string"},"sourceTable":{"type":"string"},"sourceColumns":{"type":"array","minItems":1,"items":{"type":"string"}},"targetTable":{"type":"string"},"targetColumns":{"type":"array","minItems":1,"items":{"type":"string"}},"onDelete":{"type":"string"},"onUpdate":{"type":"string"},"definition":{"type":"string"}},"additionalProperties":false}
+  }
+}

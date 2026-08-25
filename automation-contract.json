@@ -1,0 +1,16 @@
+{
+  "name":"GravityERD browser automation contract",
+  "version":"1.0.0",
+  "jsonFormatVersion":1,
+  "root":{"testId":"app-root","stateAttributes":["data-ready","data-project-loaded","data-simulation-phase","data-dirty","data-import-proposal"]},
+  "testIds":{
+    "fileInput":"project-files-input","openFiles":"open-project-files","loadExample":"load-example","proposalDialog":"import-proposal-dialog","applyProposal":"apply-import","cancelProposal":"cancel-import","applyConfiguration":"apply-configuration","applyLayout":"apply-layout","applyPins":"apply-pins","simulationToggle":"simulation-toggle","viewSelect":"view-select","configure":"configure-workspace","configJson":"config-json","applyConfig":"apply-config","copyWorkspace":"copy-workspace-json","copyProject":"copy-project-json"
+  },
+  "readOnlyApi":{"global":"gravityErdAutomation","version":"1.0.0","methods":{"getStatus":{"returns":"AutomationStatus"},"getWorkspaceJson":{"returns":"string|null"},"getProjectJson":{"returns":"string|null"},"getNode":{"arguments":["stableTableId"],"returns":"NodeStatus|null"}}},
+  "sequences":{
+    "import":["Wait for the filechooser before activating the real file input.","Set one project, one workspace, or both absolute paths in any order.","Wait for data-import-proposal=pending.","Inspect the proposal dialog and choose configuration/layout/pins.","Click Apply proposal or leave the proposal open for human review."],
+    "export":["Optionally stop the simulation using the real button.","Click Copy workspace JSON or Copy project JSON.","Read tab.clipboard.readText().","Write the returned text with a filesystem tool; do not rely on a browser download path."],
+    "humanLoop":["Leave the graph open for manual placement and pins.","After the user says they are done, re-read status, fingerprint, revision, and dirty state.","Copy workspace JSON, store it, then import it again and verify an exact round trip."]
+  },
+  "errors":["invalid-json","unsupported-format-version","missing-schema","multiple-schemas","schema-fingerprint-mismatch","invalid-stable-id","clipboard-denied"]
+}

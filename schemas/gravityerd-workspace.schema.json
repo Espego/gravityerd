@@ -1,0 +1,15 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://gravityerd.github.io/schemas/gravityerd-workspace.schema.json",
+  "title":"GravityERD workspace",
+  "type":"object",
+  "required":["kind","version","schemaFingerprint","activeView","domains","views","edgeGroups","snapshots"],
+  "properties":{
+    "kind":{"const":"gravityerd-workspace"},"version":{"const":1},"schemaFingerprint":{"type":"string","pattern":"^[a-f0-9]{64}$"},"activeView":{"type":"string"},
+    "domains":{"type":"array","items":{"type":"object","required":["id","name","color","stroke","tableIds"],"properties":{"id":{"type":"string"},"name":{"type":"string"},"color":{"type":"string","description":"Rendered when it is a six-digit #RRGGBB value; otherwise the built-in fill is used."},"stroke":{"type":"string","description":"Rendered when it is a six-digit #RRGGBB value; otherwise the built-in stroke is used."},"tableIds":{"type":"array","items":{"type":"string"}}},"additionalProperties":false}},
+    "views":{"type":"array","items":{"type":"object","required":["id","name","tableIds"],"properties":{"id":{"type":"string"},"name":{"type":"string"},"tableIds":{"type":"array","items":{"type":"string"}},"builtIn":{"type":"boolean"}},"additionalProperties":false}},
+    "edgeGroups":{"type":"array","items":{"type":"object","required":["id","name","color","weight","visible","secondary","edgeIds","sourceColumns"],"properties":{"id":{"type":"string"},"name":{"type":"string"},"color":{"type":"string","description":"Rendered when it is a six-digit #RRGGBB value; otherwise the built-in relationship color is used."},"weight":{"type":"number","minimum":0},"visible":{"type":"boolean"},"secondary":{"type":"boolean"},"edgeIds":{"type":"array","items":{"type":"string"}},"sourceColumns":{"type":"array","items":{"type":"string"}}},"additionalProperties":false}},
+    "snapshots":{"type":"array","items":{"type":"object","required":["view","model","seed","settings","positions","pinned"],"properties":{"view":{"type":"string"},"model":{"const":"fcose-realtime"},"seed":{"type":"integer","minimum":1,"maximum":4294967295},"settings":{"type":"object","additionalProperties":{"type":["number","boolean"]}},"positions":{"type":"object","additionalProperties":{"type":"object","required":["x","y"],"properties":{"x":{"type":"number"},"y":{"type":"number"}},"additionalProperties":false}},"pinned":{"type":"array","items":{"type":"string"}}},"additionalProperties":false}}
+  },
+  "additionalProperties":false
+}

@@ -1,0 +1,167 @@
+name: gravityerd
+
+x-node-limits: &node-limits
+  init: true
+  restart: "no"
+  cpus: "${GRAVITYERD_NODE_CPUS:-1.0}"
+  mem_limit: "${GRAVITYERD_NODE_MEMORY:-512m}"
+  pids_limit: 256
+  security_opt: ["no-new-privileges:true"]
+  stop_grace_period: 10s
+
+x-go-limits: &go-limits
+  init: true
+  restart: "no"
+  cpus: "${GRAVITYERD_GO_CPUS:-2.0}"
+  mem_limit: "${GRAVITYERD_GO_MEMORY:-1g}"
+  pids_limit: 256
+  security_opt: ["no-new-privileges:true"]
+  stop_grace_period: 10s
+
+x-database-limits: &database-limits
+  init: true
+  restart: "no"
+  cpus: "${GRAVITYERD_DATABASE_CPUS:-1.0}"
+  mem_limit: "${GRAVITYERD_DATABASE_MEMORY:-768m}"
+  pids_limit: 256
+  stop_grace_period: 10s
+
+services:
+  web:
+    <<: *node-limits
+    image: node:26-bookworm-slim
+    working_dir: /workspace
+    command: ["sh", "-c", "npm run examples && npm run build && npm run serve"]
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8080"
+    ports:
+      - "127.0.0.1:${GRAVITYERD_PORT:-18116}:8080"
+    volumes:
+      - .:/workspace
+      - node_modules:/workspace/node_modules
+      - npm_cache:/root/.npm
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 60s
+
+  node:
+    <<: *node-limits
+    image: node:26-bookworm-slim
+    working_dir: /workspace
+    profiles: ["tools"]
+    volumes:
+      - .:/workspace
+      - node_modules:/workspace/node_modules
+      - npm_cache:/root/.npm
+
+  playwright:
+    init: true
+    restart: "no"
+    cpus: "${GRAVITYERD_PLAYWRIGHT_CPUS:-2.0}"
+    mem_limit: "${GRAVITYERD_PLAYWRIGHT_MEMORY:-1g}"
+    pids_limit: 256
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 10s
+    image: mcr.microsoft.com/playwright:v1.62.1-noble
+    working_dir: /workspace
+    profiles: ["test"]
+    environment:
+      BASE_URL: http://web:8080
+    volumes:
+      - .:/workspace
+      - node_modules:/workspace/node_modules
+    depends_on:
+      web:
+        condition: service_healthy
+    command: ["npx", "playwright", "test", "--config", "app/playwright.config.mjs"]
+
+  go-test:
+    <<: *go-limits
+    image: golang:1.26.6-bookworm
+    working_dir: /workspace
+    profiles: ["test"]
+    volumes:
+      - .:/workspace
+      - go_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    command: ["go", "test", "./..."]
+
+  schema-export:
+    init: true
+    restart: "no"
+    cpus: "${GRAVITYERD_EXPORTER_CPUS:-1.0}"
+    mem_limit: "${GRAVITYERD_EXPORTER_MEMORY:-256m}"
+    pids_limit: 128
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 10s
+    build:
+      context: .
+      dockerfile: Dockerfile.schema
+    volumes:
+      - ./output:/output
+
+  postgres:
+    <<: *database-limits
+    image: postgres:18-bookworm
+    profiles: ["test"]
+    environment:
+      POSTGRES_DB: gravityerd
+      POSTGRES_USER: gravityerd
+      POSTGRES_PASSWORD: gravityerd
+    tmpfs:
+      - /var/lib/postgresql
+    volumes:
+      - ./test/fixtures/postgres.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gravityerd -d gravityerd"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  mysql:
+    <<: *database-limits
+    image: mysql:8.4
+    profiles: ["test"]
+    environment:
+      MYSQL_DATABASE: gravityerd
+      MYSQL_USER: gravityerd
+      MYSQL_PASSWORD: gravityerd
+      MYSQL_ROOT_PASSWORD: test-root-only
+    tmpfs:
+      - /var/lib/mysql
+    volumes:
+      - ./test/fixtures/mysql.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  schema-integration:
+    <<: *go-limits
+    image: golang:1.26.6-bookworm
+    working_dir: /workspace
+    profiles: ["test"]
+    environment:
+      POSTGRES_TEST_URL: postgres://gravityerd:gravityerd@postgres:5432/gravityerd?sslmode=disable
+      MYSQL_TEST_URL: gravityerd:gravityerd@tcp(mysql:3306)/gravityerd?parseTime=true&charset=utf8mb4&collation=utf8mb4_bin
+    volumes:
+      - .:/workspace
+      - go_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    command: ["go", "test", "-tags=integration", "./internal/exporter"]
+
+volumes:
+  node_modules:
+  npm_cache:
+  go_cache:
+  go_build_cache:

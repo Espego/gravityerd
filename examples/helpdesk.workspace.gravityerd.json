@@ -1,0 +1,169 @@
+{
+  "kind": "gravityerd-workspace",
+  "version": 1,
+  "schemaFingerprint": "a2221dfd1657cf44a31bf8320e9f096c5389dbd2ab2cc379603e544872f26257",
+  "activeView": "all",
+  "domains": [
+    {
+      "id": "ungrouped",
+      "name": "Ungrouped",
+      "color": "#E7EEF2",
+      "stroke": "#687B88",
+      "tableIds": []
+    },
+    {
+      "id": "identity",
+      "name": "Identity",
+      "color": "#E4F3E5",
+      "stroke": "#57835A",
+      "tableIds": [
+        "team_members",
+        "teams",
+        "users"
+      ]
+    },
+    {
+      "id": "customer",
+      "name": "Customers",
+      "color": "#DDEFFC",
+      "stroke": "#477EA5",
+      "tableIds": [
+        "customers"
+      ]
+    },
+    {
+      "id": "support",
+      "name": "Support",
+      "color": "#F8E5EF",
+      "stroke": "#A45F80",
+      "tableIds": [
+        "ticket_comments",
+        "ticket_labels",
+        "tickets"
+      ]
+    }
+  ],
+  "views": [
+    {
+      "id": "all",
+      "name": "All tables",
+      "tableIds": [
+        "customers",
+        "team_members",
+        "teams",
+        "ticket_comments",
+        "ticket_labels",
+        "tickets",
+        "users"
+      ],
+      "builtIn": true
+    },
+    {
+      "id": "support-flow",
+      "name": "Support flow",
+      "tableIds": [
+        "customers",
+        "ticket_comments",
+        "ticket_labels",
+        "tickets"
+      ],
+      "builtIn": false
+    }
+  ],
+  "edgeGroups": [
+    {
+      "id": "primary",
+      "name": "Primary relationships",
+      "color": "#52606D",
+      "weight": 1,
+      "visible": true,
+      "secondary": false,
+      "edgeIds": [],
+      "sourceColumns": []
+    },
+    {
+      "id": "secondary",
+      "name": "Secondary relationships",
+      "color": "#9AA5B1",
+      "weight": 0.15,
+      "visible": true,
+      "secondary": true,
+      "edgeIds": [],
+      "sourceColumns": [
+        "author_id",
+        "created_by"
+      ]
+    },
+    {
+      "id": "ownership",
+      "name": "Ownership",
+      "color": "#28798A",
+      "weight": 0.8,
+      "visible": true,
+      "secondary": false,
+      "edgeIds": [
+        "tickets(assigned_team_id)>teams(id)"
+      ],
+      "sourceColumns": []
+    }
+  ],
+  "snapshots": [
+    {
+      "view": "all",
+      "model": "fcose-realtime",
+      "seed": 20260824,
+      "settings": {
+        "fcoseIdealEdgeLength": 140,
+        "fcoseAttraction": 1,
+        "fcoseRepulsion": 1,
+        "fcoseGravity": 1,
+        "fcoseIterations": 240,
+        "edgeContraction": 1,
+        "edgeContractionExponent": 1.65,
+        "repulsionRange": 220,
+        "repulsion": 1,
+        "gravity": 1,
+        "collisionPadding": 24,
+        "domainAttraction": 1.25,
+        "fanTension": 0.45,
+        "auditWeight": 0.15,
+        "showAuditEdges": false,
+        "speed": 1
+      },
+      "positions": {
+        "users": {
+          "x": -300,
+          "y": -180
+        },
+        "teams": {
+          "x": 0,
+          "y": -180
+        },
+        "team_members": {
+          "x": -150,
+          "y": -20
+        },
+        "customers": {
+          "x": -320,
+          "y": 250
+        },
+        "tickets": {
+          "x": 0,
+          "y": 220
+        },
+        "ticket_comments": {
+          "x": 320,
+          "y": 100
+        },
+        "ticket_labels": {
+          "x": 320,
+          "y": 330
+        }
+      },
+      "pinned": [
+        "customers",
+        "users"
+      ]
+    }
+  ]
+}

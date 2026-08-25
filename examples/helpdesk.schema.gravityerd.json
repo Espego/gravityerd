@@ -1,0 +1,383 @@
+{
+  "kind": "gravityerd-project",
+  "version": 1,
+  "schema": {
+    "engine": "postgresql",
+    "namespace": "public",
+    "tables": [
+      {
+        "id": "customers",
+        "name": "customers",
+        "comment": "",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false,
+            "ordinal": 1
+          },
+          {
+            "name": "display_name",
+            "type": "text",
+            "nullable": false,
+            "ordinal": 2
+          }
+        ],
+        "constraints": [
+          {
+            "id": "customers_pkey",
+            "name": "customers_pkey",
+            "type": "primary_key",
+            "columns": [
+              "id"
+            ],
+            "definition": "PRIMARY KEY (id)"
+          }
+        ]
+      },
+      {
+        "id": "team_members",
+        "name": "team_members",
+        "comment": "",
+        "columns": [
+          {
+            "name": "team_id",
+            "type": "uuid",
+            "nullable": false,
+            "ordinal": 1
+          },
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "nullable": false,
+            "ordinal": 2
+          }
+        ],
+        "constraints": [
+          {
+            "id": "team_members_pkey",
+            "name": "team_members_pkey",
+            "type": "primary_key",
+            "columns": [
+              "team_id",
+              "user_id"
+            ],
+            "definition": "PRIMARY KEY (team_id, user_id)"
+          }
+        ]
+      },
+      {
+        "id": "teams",
+        "name": "teams",
+        "comment": "",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false,
+            "ordinal": 1
+          },
+          {
+            "name": "name",
+            "type": "text",
+            "nullable": false,
+            "ordinal": 2
+          }
+        ],
+        "constraints": [
+          {
+            "id": "teams_pkey",
+            "name": "teams_pkey",
+            "type": "primary_key",
+            "columns": [
+              "id"
+            ],
+            "definition": "PRIMARY KEY (id)"
+          }
+        ]
+      },
+      {
+        "id": "ticket_comments",
+        "name": "ticket_comments",
+        "comment": "",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false,
+            "ordinal": 1
+          },
+          {
+            "name": "ticket_id",
+            "type": "uuid",
+            "nullable": false,
+            "ordinal": 2
+          },
+          {
+            "name": "author_id",
+            "type": "uuid",
+            "nullable": false,
+            "ordinal": 3
+          },
+          {
+            "name": "body",
+            "type": "text",
+            "nullable": false,
+            "ordinal": 4
+          }
+        ],
+        "constraints": [
+          {
+            "id": "ticket_comments_pkey",
+            "name": "ticket_comments_pkey",
+            "type": "primary_key",
+            "columns": [
+              "id"
+            ],
+            "definition": "PRIMARY KEY (id)"
+          }
+        ]
+      },
+      {
+        "id": "ticket_labels",
+        "name": "ticket_labels",
+        "comment": "",
+        "columns": [
+          {
+            "name": "ticket_id",
+            "type": "uuid",
+            "nullable": false,
+            "ordinal": 1
+          },
+          {
+            "name": "label",
+            "type": "text",
+            "nullable": false,
+            "ordinal": 2
+          }
+        ],
+        "constraints": [
+          {
+            "id": "ticket_labels_pkey",
+            "name": "ticket_labels_pkey",
+            "type": "primary_key",
+            "columns": [
+              "ticket_id",
+              "label"
+            ],
+            "definition": "PRIMARY KEY (ticket_id, label)"
+          }
+        ]
+      },
+      {
+        "id": "tickets",
+        "name": "tickets",
+        "comment": "",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false,
+            "ordinal": 1
+          },
+          {
+            "name": "customer_id",
+            "type": "uuid",
+            "nullable": false,
+            "ordinal": 2
+          },
+          {
+            "name": "assigned_team_id",
+            "type": "uuid",
+            "nullable": true,
+            "ordinal": 3
+          },
+          {
+            "name": "created_by",
+            "type": "uuid",
+            "nullable": false,
+            "ordinal": 4
+          },
+          {
+            "name": "subject",
+            "type": "text",
+            "nullable": false,
+            "ordinal": 5
+          }
+        ],
+        "constraints": [
+          {
+            "id": "tickets_pkey",
+            "name": "tickets_pkey",
+            "type": "primary_key",
+            "columns": [
+              "id"
+            ],
+            "definition": "PRIMARY KEY (id)"
+          }
+        ]
+      },
+      {
+        "id": "users",
+        "name": "users",
+        "comment": "People who can access the helpdesk",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false,
+            "ordinal": 1
+          },
+          {
+            "name": "email",
+            "type": "text",
+            "nullable": false,
+            "ordinal": 2
+          }
+        ],
+        "constraints": [
+          {
+            "id": "users_email_key",
+            "name": "users_email_key",
+            "type": "unique",
+            "columns": [
+              "email"
+            ],
+            "definition": "UNIQUE (email)"
+          },
+          {
+            "id": "users_pkey",
+            "name": "users_pkey",
+            "type": "primary_key",
+            "columns": [
+              "id"
+            ],
+            "definition": "PRIMARY KEY (id)"
+          }
+        ]
+      }
+    ],
+    "foreignKeys": [
+      {
+        "name": "team_members_team_fk",
+        "sourceTable": "team_members",
+        "sourceColumns": [
+          "team_id"
+        ],
+        "targetTable": "teams",
+        "targetColumns": [
+          "id"
+        ],
+        "onDelete": "CASCADE",
+        "onUpdate": "NO ACTION",
+        "definition": "FOREIGN KEY (team_id) REFERENCES teams(id)",
+        "id": "team_members(team_id)>teams(id)"
+      },
+      {
+        "name": "team_members_user_fk",
+        "sourceTable": "team_members",
+        "sourceColumns": [
+          "user_id"
+        ],
+        "targetTable": "users",
+        "targetColumns": [
+          "id"
+        ],
+        "onDelete": "CASCADE",
+        "onUpdate": "NO ACTION",
+        "definition": "FOREIGN KEY (user_id) REFERENCES users(id)",
+        "id": "team_members(user_id)>users(id)"
+      },
+      {
+        "name": "comments_author_fk",
+        "sourceTable": "ticket_comments",
+        "sourceColumns": [
+          "author_id"
+        ],
+        "targetTable": "users",
+        "targetColumns": [
+          "id"
+        ],
+        "onDelete": "RESTRICT",
+        "onUpdate": "NO ACTION",
+        "definition": "FOREIGN KEY (author_id) REFERENCES users(id)",
+        "id": "ticket_comments(author_id)>users(id)"
+      },
+      {
+        "name": "comments_ticket_fk",
+        "sourceTable": "ticket_comments",
+        "sourceColumns": [
+          "ticket_id"
+        ],
+        "targetTable": "tickets",
+        "targetColumns": [
+          "id"
+        ],
+        "onDelete": "CASCADE",
+        "onUpdate": "NO ACTION",
+        "definition": "FOREIGN KEY (ticket_id) REFERENCES tickets(id)",
+        "id": "ticket_comments(ticket_id)>tickets(id)"
+      },
+      {
+        "name": "labels_ticket_fk",
+        "sourceTable": "ticket_labels",
+        "sourceColumns": [
+          "ticket_id"
+        ],
+        "targetTable": "tickets",
+        "targetColumns": [
+          "id"
+        ],
+        "onDelete": "CASCADE",
+        "onUpdate": "NO ACTION",
+        "definition": "FOREIGN KEY (ticket_id) REFERENCES tickets(id)",
+        "id": "ticket_labels(ticket_id)>tickets(id)"
+      },
+      {
+        "name": "tickets_team_fk",
+        "sourceTable": "tickets",
+        "sourceColumns": [
+          "assigned_team_id"
+        ],
+        "targetTable": "teams",
+        "targetColumns": [
+          "id"
+        ],
+        "onDelete": "SET NULL",
+        "onUpdate": "NO ACTION",
+        "definition": "FOREIGN KEY (assigned_team_id) REFERENCES teams(id)",
+        "id": "tickets(assigned_team_id)>teams(id)"
+      },
+      {
+        "name": "tickets_created_by_fk",
+        "sourceTable": "tickets",
+        "sourceColumns": [
+          "created_by"
+        ],
+        "targetTable": "users",
+        "targetColumns": [
+          "id"
+        ],
+        "onDelete": "RESTRICT",
+        "onUpdate": "NO ACTION",
+        "definition": "FOREIGN KEY (created_by) REFERENCES users(id)",
+        "id": "tickets(created_by)>users(id)"
+      },
+      {
+        "name": "tickets_customer_fk",
+        "sourceTable": "tickets",
+        "sourceColumns": [
+          "customer_id"
+        ],
+        "targetTable": "customers",
+        "targetColumns": [
+          "id"
+        ],
+        "onDelete": "RESTRICT",
+        "onUpdate": "NO ACTION",
+        "definition": "FOREIGN KEY (customer_id) REFERENCES customers(id)",
+        "id": "tickets(customer_id)>customers(id)"
+      }
+    ]
+  }
+}

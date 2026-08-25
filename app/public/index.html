@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; connect-src 'self'; font-src 'self'; form-action 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self'; worker-src 'self'">
+  <meta name="referrer" content="no-referrer">
+  <title>GravityERD</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main id="gravityerd-app" class="laboratory" data-testid="app-root" data-ready="false" data-project-loaded="false" data-simulation-phase="idle" data-dirty="false" data-import-proposal="none">
+    <aside class="controls" aria-label="GravityERD controls">
+      <header>
+        <p class="eyebrow">Database schema workspace</p>
+        <h1>GravityERD</h1>
+        <p id="schema-status" class="subtle" data-testid="schema-status">Open a schema or load the example.</p>
+      </header>
+      <div class="project-actions">
+        <label class="file-action primary" data-testid="open-project-files">Open project files<input id="project-files" data-testid="project-files-input" type="file" accept="application/json,.json" multiple></label>
+        <button id="load-example" data-testid="load-example" type="button">Load example</button>
+      </div>
+      <section id="simulation-controls" hidden>
+        <div class="primary-actions">
+          <button id="run-toggle" data-testid="simulation-toggle" type="button" class="primary">Stop</button>
+          <button id="fit" data-testid="fit-view" type="button">Fit view</button>
+        </div>
+        <label>View<select id="view-select" data-testid="view-select"></select></label>
+        <label>Seed<input id="seed" data-testid="seed-input" type="number" inputmode="numeric" value="20260823" min="1" max="4294967295"></label>
+        <section class="sliders" aria-label="Layout parameters">
+          <section class="parameter-group" aria-labelledby="fcose-parameters">
+            <h2 id="fcose-parameters">fCoSE bootstrap</h2>
+            <p class="subtle">Runs after a reset, a new seed, or for newly added tables.</p>
+            <label><span>Ideal relationship length <output data-for="fcoseIdealEdgeLength"></output></span><input data-setting="fcoseIdealEdgeLength" type="range" min="40" max="360" step="10"></label>
+            <label><span>Relationship attraction <output data-for="fcoseAttraction"></output></span><input data-setting="fcoseAttraction" type="range" min="0.1" max="2" step="0.1"></label>
+            <label><span>Node repulsion <output data-for="fcoseRepulsion"></output></span><input data-setting="fcoseRepulsion" type="range" min="0.1" max="4" step="0.1"></label>
+            <label><span>Gravity <output data-for="fcoseGravity"></output></span><input data-setting="fcoseGravity" type="range" min="0" max="4" step="0.1"></label>
+            <label><span>Iterations <output data-for="fcoseIterations"></output></span><input data-setting="fcoseIterations" type="range" min="50" max="600" step="10"></label>
+          </section>
+          <section class="parameter-group" aria-labelledby="realtime-parameters">
+            <h2 id="realtime-parameters">Realtime gravity model</h2>
+            <p class="subtle">Changes reheat the current layout without resetting positions or pins.</p>
+            <label><span>Relationship contraction <output data-for="edgeContraction"></output></span><input data-setting="edgeContraction" type="range" min="0" max="3" step="0.05"></label>
+            <label><span>Contraction exponent <output data-for="edgeContractionExponent"></output></span><input data-setting="edgeContractionExponent" type="range" min="1" max="2.5" step="0.05"></label>
+            <label><span>Repulsion range <output data-for="repulsionRange"></output></span><input data-setting="repulsionRange" type="range" min="40" max="500" step="10"></label>
+            <label><span>Node repulsion <output data-for="repulsion"></output></span><input data-setting="repulsion" type="range" min="0" max="4" step="0.1"></label>
+            <label><span>Gravity <output data-for="gravity"></output></span><input data-setting="gravity" type="range" min="0" max="4" step="0.1"></label>
+            <label><span>Node gap <output data-for="collisionPadding"></output></span><input data-setting="collisionPadding" type="range" min="0" max="100" step="2"></label>
+            <label><span>Domain attraction <output data-for="domainAttraction"></output></span><input data-setting="domainAttraction" type="range" min="0" max="2" step="0.05"></label>
+            <label><span>Angular fans <output data-for="fanTension"></output></span><input data-setting="fanTension" type="range" min="0" max="2" step="0.05"></label>
+            <label><span>Speed <output data-for="speed"></output></span><input data-setting="speed" type="range" min="0.2" max="3" step="0.1"></label>
+          </section>
+        </section>
+        <div class="action-grid">
+          <button id="reset" data-testid="reset-seed" type="button">Reset seed</button>
+          <button id="new-seed" data-testid="new-seed" type="button">New seed</button>
+          <button id="unlock" data-testid="unlock-all" type="button">Unlock all</button>
+          <button id="configure" data-testid="configure-workspace" type="button">Configure</button>
+        </div>
+        <div class="format-help" role="note">
+          <p><strong>Project</strong> contains the database schema and its workspace.</p>
+          <p><strong>Workspace</strong> contains only domains, views, relationship groups, physics settings, positions, and pins for a matching schema.</p>
+        </div>
+        <div class="action-grid">
+          <button id="copy-workspace" data-testid="copy-workspace-json" type="button">Copy workspace JSON</button>
+          <button id="copy-project" data-testid="copy-project-json" type="button">Copy project JSON</button>
+          <button id="download-workspace" type="button">Download workspace</button>
+          <button id="download-project" type="button">Download project</button>
+          <button id="export-drawio" data-testid="export-drawio" type="button">Export draw.io</button>
+        </div>
+      </section>
+      <p id="message" class="message" role="status" aria-live="polite"></p>
+    </aside>
+    <section class="workspace" aria-label="Database diagram">
+      <div id="empty-state" class="empty-state"><h2>Explore a schema locally</h2><p>GravityERD runs entirely in your browser. Imported metadata never leaves this page.</p></div>
+      <div id="workspace-bar" class="workspace-bar" hidden>
+        <span id="run-status">Simulation stopped</span>
+        <dl class="metrics">
+          <div><dt>Overlaps</dt><dd data-metric="nodeOverlaps">0</dd></div><div><dt>Node hits</dt><dd data-metric="nodeIntersections">0</dd></div>
+          <div><dt>Crossings</dt><dd data-metric="crossings">0</dd></div><div><dt>Shared</dt><dd data-metric="sharedLength">0</dd></div>
+          <div><dt>Length</dt><dd data-metric="totalEdgeLength">0</dd></div><div><dt>Area</dt><dd data-metric="area">0</dd></div><div><dt>Motion</dt><dd data-metric="movement">0</dd></div>
+        </dl>
+      </div>
+      <div id="graph" aria-label="Interactive ERD"></div><div id="graph-labels" aria-hidden="true"></div>
+    </section>
+    <dialog id="import-dialog" data-testid="import-proposal-dialog" aria-labelledby="import-title">
+      <form method="dialog" class="dialog-card">
+        <header><div><p class="eyebrow">Review before applying</p><h2 id="import-title">Import proposal</h2></div><button value="cancel" class="icon-button" aria-label="Cancel import">×</button></header>
+        <p id="import-fingerprint" class="mono"></p><dl id="import-summary" class="proposal-summary"></dl>
+        <fieldset><legend>Apply from imported workspace</legend>
+          <label class="check"><input id="apply-configuration" data-testid="apply-configuration" type="checkbox" checked> Domains, views, relationship groups, and parameters</label>
+          <label class="check"><input id="apply-layout" data-testid="apply-layout" type="checkbox" checked> Positions</label>
+          <label class="check"><input id="apply-pins" data-testid="apply-pins" type="checkbox" checked> Pins</label>
+        </fieldset>
+        <p id="import-warning" class="warning"></p>
+        <footer><button value="cancel" data-testid="cancel-import" type="submit">Cancel</button><button id="apply-import" data-testid="apply-import" type="button" class="primary">Apply proposal</button></footer>
+      </form>
+    </dialog>
+    <dialog id="config-dialog" class="dialog-wide" data-testid="workspace-config-dialog" aria-labelledby="config-title">
+      <form method="dialog" class="dialog-card">
+        <header><div><p class="eyebrow">Workspace metadata</p><h2 id="config-title">Domains, views, and relationship groups</h2></div><button value="cancel" class="icon-button" aria-label="Close configuration">×</button></header>
+        <p class="subtle">Edit a JSON list. Stable table and relationship IDs are shown below.</p>
+        <div class="config-tabs" role="tablist"><button type="button" role="tab" aria-selected="true" data-config-tab="domains">Domains</button><button type="button" role="tab" aria-selected="false" data-config-tab="views">Views</button><button type="button" role="tab" aria-selected="false" data-config-tab="edgeGroups">Relationship groups</button></div>
+        <label>Configuration JSON<textarea id="config-json" data-testid="config-json" spellcheck="false"></textarea></label>
+        <details><summary>Available stable IDs</summary><pre id="schema-ids"></pre></details><p id="config-error" class="warning" role="alert"></p>
+        <footer><button value="cancel" type="submit">Cancel</button><button id="apply-config" data-testid="apply-config" type="button" class="primary">Apply configuration</button></footer>
+      </form>
+    </dialog>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

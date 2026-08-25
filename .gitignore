@@ -1,0 +1,8 @@
+/dist/
+/node_modules/
+/output/*
+!/output/.gitkeep
+/test-results/
+/playwright-report/
+*.log
+.DS_Store
